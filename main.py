@@ -79,7 +79,7 @@ async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
 
 
     try:
-        from file_processor import extract_text
+        from pdf_service import extract_text
         text_content = extract_text(save_path)
     except ImportError:
 
