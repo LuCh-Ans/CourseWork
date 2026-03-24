@@ -25,15 +25,46 @@ _USER_PROMPT_TEMPLATE = (
     "Write in the same language as the source text.\n\n"
     "Text:\n{text}"
 )
-async def summarize(text: str) -> str:
+
+_COMBINE_PROMPT_TEMPLATE = (
+    "Below are summaries of consecutive parts of a single educational document. "
+    "Combine them into one coherent summary. "
+    "Keep the main ideas, key concepts, and important conclusions. "
+    "Write in the same language as the summaries.\n\n"
+    "{text}"
+)
+
+
+async def summarize(chunks: list[str]) -> str:
+    """
+    Accepts a list of text chunks from pdf_service.limit().
+    If one chunk — summarizes directly.
+    If multiple — summarizes each chunk, then merges into one final summary.
+    """
     if not LLM_API_KEY:
         raise RuntimeError("LLM_API_KEY environment variable is not set.")
 
-    if LLM_PROVIDER == "yagpt":
-        return await _yagpt_summarize(text)
+    if len(chunks) == 1:
+        return await _summarize_chunk(chunks[0], _USER_PROMPT_TEMPLATE)
 
-    return await _openai_compat_summarize(text)
-async def _openai_compat_summarize(text: str) -> str:
+    # Map: summarize each chunk separately
+    partial_summaries = []
+    for i, chunk in enumerate(chunks, start=1):
+        partial = await _summarize_chunk(chunk, _USER_PROMPT_TEMPLATE)
+        partial_summaries.append(f"Part {i}:\n{partial}")
+
+    # Reduce: merge all partial summaries into one
+    combined = "\n\n".join(partial_summaries)
+    return await _summarize_chunk(combined, _COMBINE_PROMPT_TEMPLATE)
+
+
+async def _summarize_chunk(text: str, prompt_template: str) -> str:
+    if LLM_PROVIDER == "yagpt":
+        return await _yagpt_summarize(text, prompt_template)
+    return await _openai_compat_summarize(text, prompt_template)
+
+
+async def _openai_compat_summarize(text: str, prompt_template: str) -> str:
     endpoint = _ENDPOINTS.get(LLM_PROVIDER)
     if not endpoint:
         raise RuntimeError(
@@ -51,7 +82,7 @@ async def _openai_compat_summarize(text: str) -> str:
         "temperature": LLM_TEMPERATURE,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user",   "content": _USER_PROMPT_TEMPLATE.format(text=text)},
+            {"role": "user",   "content": prompt_template.format(text=text)},
         ],
     }
 
@@ -70,7 +101,7 @@ async def _openai_compat_summarize(text: str) -> str:
         raise RuntimeError(f"Unexpected response format from {LLM_PROVIDER}: {data}") from exc
 
 
-async def _yagpt_summarize(text: str) -> str:
+async def _yagpt_summarize(text: str, prompt_template: str) -> str:
     folder_id = os.getenv("YAGPT_FOLDER_ID", "")
     if not folder_id:
         raise RuntimeError("YAGPT_FOLDER_ID environment variable is not set.")
@@ -88,7 +119,7 @@ async def _yagpt_summarize(text: str) -> str:
         },
         "messages": [
             {"role": "system", "text": _SYSTEM_PROMPT},
-            {"role": "user",   "text": _USER_PROMPT_TEMPLATE.format(text=text)},
+            {"role": "user",   "text": prompt_template.format(text=text)},
         ],
     }
 
