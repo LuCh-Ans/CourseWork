@@ -8,9 +8,22 @@ httpx>=0.27.0
 
 # PDF extraction
 pdfplumber>=0.11.0
+PyPDF2>=3.0.0
+pdfminer.six>=20221105
+pdf2image>=1.17.0
+
+# OCR
+pytesseract>=0.3.10
+Pillow>=10.0.0
 
 # DOCX extraction
 python-docx>=1.1.0
 
 # Environment variables
 python-dotenv>=1.0.0
+pydantic-settings>=2.0.0
+
+# Database
+sqlalchemy>=2.0.0
+asyncpg>=0.29.0
+alembic>=1.13.0
