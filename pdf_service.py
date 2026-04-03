@@ -8,10 +8,13 @@ import pytesseract
 import os
 from pathlib import Path
 from docx import Document
+import os
+from dotenv import load_dotenv  
+load_dotenv()
 #print(os.path.exists(r"C:\Users\yanaa\Downloads\poppler\poppler-25.12.0\Library\bin"))
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-POPPLER_PATH = r"C:\Users\yanaa\Downloads\poppler\poppler-25.12.0\Library\bin"
+pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_PATH", r"tesseract")
+POPPLER_PATH = os.getenv("POPPLER_PATH")
 
 
 #print(os.path.exists(r"C:\Users\yanaa\Downloads\tesseract-ocr-w64-setup-5.5.0.20241111.exe"))
@@ -184,6 +187,8 @@ def analyze_pdf(pdf):
     cleaned_text = clean_text(raw_text)
     chunks = limit(cleaned_text)
     print(chunks)'''
+
+
 def process_file(file_path: Path) -> list[dict]:
     blocks = extract_text(file_path)
     blocks = [
@@ -192,6 +197,7 @@ def process_file(file_path: Path) -> list[dict]:
         if clean_text(b["content"])
     ]
     return blocks
+
 def blocks_to_text(blocks: list[dict], max_length: int = 120_000) -> str:
     lines = []
     total_length = 0
