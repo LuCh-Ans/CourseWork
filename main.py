@@ -3,10 +3,14 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-from pdf_service import extract_text, clean_text, limit
+from pdf_service import process_file, blocks_to_text 
+
 from llm_client import summarize
-
+ 
 UPLOAD_DIR = Path("files/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -37,19 +41,17 @@ async def test() -> JSONResponse:
     return JSONResponse({"status": "ok", "message": "Server is running."})
 
 
+ 
 @app.post("/upload", tags=["Summarization"])
 async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
-    
+
     original_name = file.filename or "unknown"
     suffix = Path(original_name).suffix.lower()
 
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=415,
-            detail=(
-                f"File type '{suffix}' is not supported. "
-                f"Allowed: {sorted(ALLOWED_EXTENSIONS)}"
-            ),
+            detail=f"File type '{suffix}' is not supported. Allowed: {sorted(ALLOWED_EXTENSIONS)}",
         )
 
     raw_bytes = await file.read()
@@ -67,46 +69,28 @@ async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
     save_path = UPLOAD_DIR / unique_name
     save_path.write_bytes(raw_bytes)
 
-    
     try:
-        if suffix == ".pdf":
-            raw_text = extract_text(save_path)
-        elif suffix in {".txt", ".docx"}:
-            raw_text = _fallback_read_text(raw_bytes)
-        else:
-            raw_text = _fallback_read_text(raw_bytes)
+        blocks = process_file(save_path)
     except Exception as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Text extraction failed: {exc}",
-        ) from exc
+        raise HTTPException(status_code=422, detail=f"Text extraction failed: {exc}") from exc
 
-    if not raw_text.strip():
-        raise HTTPException(
-            status_code=422,
-            detail="No text could be extracted from the file.",
-        )
+    if not blocks:
+        raise HTTPException(status_code=422, detail="No text could be extracted from the file.")
 
-    
-    cleaned_text = clean_text(raw_text)
-    chunks = limit(cleaned_text)  
+    prompt_text = blocks_to_text(blocks)
 
-    
     try:
-        summary = await summarize(chunks)
+        summary = "SKIPPED_FOR_TESTING" #await summarize(prompt_text)  # строка, не чанки
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return JSONResponse(
-        {
-            "original_filename":    original_name,
-            "saved_as":             unique_name,
-            "characters_extracted": len(cleaned_text),
-            "chunks_count":         len(chunks),
-            "summary":              summary,
-        }
-    )
-
+    return JSONResponse({
+        "original_filename":    original_name,
+        "saved_as":             unique_name,
+        "characters_extracted": len(prompt_text),
+        "blocks_count":         len(blocks),
+        "summary":              summary,
+    })
 
 def _fallback_read_text(raw_bytes: bytes) -> str:
     try:
