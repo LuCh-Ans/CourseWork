@@ -1,10 +1,9 @@
-import uuid
-from datetime import datetime
-
 from sqlalchemy import DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from pydantic import BaseModel
+import uuid
+from datetime import datetime
 from database.base import Base
 
 
@@ -26,3 +25,18 @@ class Summary(Base):
     )
 
     document: Mapped["Document"] = relationship(back_populates="summary")  # noqa: F821
+
+
+class SummaryResponse(BaseModel):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    text: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UploadResponse(BaseModel):
+    document: "DocumentResponse"  # noqa
+    summary: SummaryResponse

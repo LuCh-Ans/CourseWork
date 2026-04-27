@@ -2,14 +2,15 @@ import uuid
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
+from auth.authent import router as auth_router
 
 load_dotenv()
 
 from pdf_service import process_file, blocks_to_text
-
 from llm.llm_client import summarize
 
 UPLOAD_DIR = Path("files/uploads")
@@ -35,12 +36,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Подключаем статические файлы
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+app.include_router(auth_router)
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Главная страница с формой загрузки"""
+    html_path = Path("static/study_ai_upload_home.html")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page():
+    """Страница чата"""
+    html_path = Path("static/study_ai_chat_interface.html")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+@app.get("/flashcards", response_class=HTMLResponse)
+async def flashcards_page():
+    """Страница карточек"""
+    html_path = Path("static/study_ai_flashcards.html")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+@app.get("/roadmap", response_class=HTMLResponse)
+async def roadmap_page():
+    """Страница роадмапа"""
+    html_path = Path("static/study_ai_roadmap.html")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    """Страница входа"""
+    html_path = Path("static/study_ai_login.html")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/test", tags=["Health"])
 async def test() -> JSONResponse:
     """Smoke-test endpoint. Returns 200 if the server is running."""
     return JSONResponse({"status": "ok", "message": "Server is running."})
-
 
 @app.post("/upload", tags=["Summarization"])
 async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
@@ -79,7 +113,7 @@ async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
     prompt_text = blocks_to_text(blocks)
 
     try:
-        summary =  await summarize(prompt_text)  
+        summary = await summarize(prompt_text)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -90,7 +124,6 @@ async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
         "blocks_count": len(blocks),
         "summary": summary,
     })
-
 
 def _fallback_read_text(raw_bytes: bytes) -> str:
     try:

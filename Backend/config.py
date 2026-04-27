@@ -15,12 +15,12 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 10
 
     # LLM
-    LLM_PROVIDER: str = "openai"
-    LLM_API_KEY: str = ""
-    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_PROVIDER: str = "ollama"
+    LLM_API_KEY: str = "ollama"
+    LLM_MODEL: str = "llama 3.2."
     LLM_MAX_TOKENS: int = 1024
     LLM_TEMPERATURE: float = 0.3
-    YAGPT_FOLDER_ID: str = ""
+
 
 
 settings = Settings()

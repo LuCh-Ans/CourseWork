@@ -1,9 +1,8 @@
 from fastapi import Cookie, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
-from app.models.user import User
-from app.services.auth import AuthService
+from database.session import get_db
+from database.user import User
 
 SESSION_COOKIE_NAME = "session_id"
 
@@ -17,6 +16,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated.",
         )
+    from CourseWork.Backend.auth.auth_service import AuthService
     user = await AuthService(db).get_user_by_session(session_id)
     if not user or not user.is_active:
         raise HTTPException(

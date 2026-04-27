@@ -4,13 +4,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from Backend.auth.deps import get_current_user
-from Backend.config import settings
-from Backend.database.session import get_db
-from Backend.database.user import User
-from Backend.database.document import DocumentListResponse, DocumentResponse
-from Backend.database.summary import SummaryResponse, UploadResponse
-from Backend.database.document import DocumentService
+from auth.deps import get_current_user
+from config import settings
+from database.session import get_db
+from database.user import User
+from database.document import DocumentListResponse, DocumentResponse
+from database.summary import SummaryResponse, UploadResponse
+from database.document import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
