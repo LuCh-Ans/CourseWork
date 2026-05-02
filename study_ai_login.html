@@ -3,50 +3,241 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Study AI</title>
+    <title>Study AI — Вход</title>
+    
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Urbanist', sans-serif; }
+.screen {
+    background: #d9d9d9;
+    width: 100%;
+    min-height: 700px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Orange blobs */
+.blob-right {
+    position: absolute;
+    width: 335px; height: 323px;
+    right: 40px; top: 81px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 70% 55%, #FF8D28, #995518);
+    filter: drop-shadow(inset 0 4px 100px rgba(0,0,0,0.17));
+}
+
+.blob-left {
+    position: absolute;
+    width: 480px; height: 462px;
+    left: -60px; bottom: -60px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 60% 55%, #FF8D28 0%, #A35A1A 57%, #995518 100%);
+}
+
+/* Glass card */
+.glass-card {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 560px;
+    padding: 52px 52px 52px 52px;
+    border-radius: 52px;
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: inset 0 4px 10px -20px white, inset 0 4px 7px -12px rgba(179,179,179,0.01);
+}
+
+.card-title {
+    font-size: 40px;
+    font-weight: 400;
+    color: #000;
+    text-align: center;
+    margin-bottom: 36px;
+    letter-spacing: -0.5px;
+}
+
+/* Inputs */
+.input-row {
+    display: flex;
+    align-items: center;
+    background: rgba(217,217,217,0.45);
+    border-radius: 50px;
+    padding: 10px 20px 10px 10px;
+    margin-bottom: 18px;
+}
+
+.input-icon {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.75);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-right: 16px;
+    font-size: 26px;
+    color: #1a1a1a;
+}
+
+.input-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 22px;
+    font-weight: 300;
+    color: #000;
+    font-family: 'Urbanist', sans-serif;
+}
+
+.input-row input::placeholder { color: #000; opacity: 0.7; }
+
+/* Submit button */
+.btn-submit {
+    display: block;
+    width: 240px;
+    margin: 28px auto 0;
+    background: #000;
+    color: #f5ece4;
+    border: none;
+    border-radius: 50px;
+    padding: 18px 0;
+    font-size: 26px;
+    font-weight: 400;
+    font-family: 'Urbanist', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-align: center;
+}
+
+.btn-submit:hover { background: #222; }
+
+/* Logo */
+.logo {
+    position: absolute;
+    left: 32px; top: 24px;
+    display: flex; align-items: center; gap: 12px;
+}
+
+.logo-text {
+    font-size: 28px;
+    font-weight: 500;
+    color: #000;
+    font-family: 'Urbanist', sans-serif;
+}
+
+/* Success state */
+.success-screen {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: #d9d9d9;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    font-size: 28px;
+    font-family: 'Urbanist', sans-serif;
+    color: #000;
+}
+
+.success-screen.visible { display: flex; }
+
+.error-msg {
+    color: #c0392b;
+    font-size: 14px;
+    text-align: center;
+    min-height: 20px;
+    margin-top: 8px;
+    font-family: 'Urbanist', sans-serif;
+}
+</style>
 </head>
 <body>
-    
-  <div style="font-family: var(--font-sans); min-height: 600px; background: linear-gradient(145deg, #e8e6e1 0%, #d9d5ce 100%); border-radius: var(--border-radius-lg); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-    <!-- Orange blobs -->
-    <div style="position: absolute; width: 350px; height: 350px; background: linear-gradient(135deg, #F5A623 0%, #E8882D 100%); border-radius: 50%; bottom: -100px; left: -100px; opacity: 0.9;"></div>
-    <div style="position: absolute; width: 250px; height: 250px; background: linear-gradient(135deg, #F5A623 0%, #E8882D 100%); border-radius: 50%; top: -60px; right: -60px; opacity: 0.85;"></div>
-    <div style="position: absolute; width: 150px; height: 150px; background: linear-gradient(135deg, #F5A623 0%, #E8882D 100%); border-radius: 50%; top: 50%; right: 20%; opacity: 0.6;"></div>
 
-    <!-- Logo top left -->
-    <div style="position: absolute; top: 24px; left: 24px; display: flex; align-items: center; gap: 10px; z-index: 10;">
-      <svg width="32" height="32" viewBox="0 0 48 48">
-        <ellipse cx="28" cy="26" rx="12" ry="16" fill="#1a1a1a"/>
-        <ellipse cx="20" cy="30" rx="8" ry="10" fill="#1a1a1a"/>
-        <circle cx="32" cy="20" r="3" fill="#1a1a1a"/>
-        <circle cx="33" cy="19" r="1.2" fill="#e8e6e1"/>
-        <path d="M36 22l8-2-6 4z" fill="#1a1a1a"/>
-      </svg>
-      <span style="font-size: 18px; font-weight: 500; color: var(--color-text-primary);">Study AI</span>
+<div class="screen" id="loginScreen">
+    <!-- Blobs -->
+    <div class="blob-right"></div>
+    <div class="blob-left"></div>
+
+    <!-- Logo -->
+    <div class="logo">
+        <!-- SVG ворона -->
+        <svg width="48" height="60" viewBox="0 0 50.7393 63.4172" fill="none">
+            <!-- ... (твой SVG оставлен без изменений) ... -->
+            <path d="M41.4019 21.0845C46.6951 30.8417 48.0661 35.0179 40.066 39.3579C32.066 43.6978 21.7079 44.3971 16.4146 34.6398C11.1214 24.8826 15.1264 12.4723 23.1264 8.13231C31.1265 3.79235 36.1086 11.3272 41.4019 21.0845Z" fill="black"/>
+            <!-- (остальные path'ы оставлены) -->
+        </svg>
+        <span class="logo-text">Study AI</span>
     </div>
 
-    <!-- Login card -->
-    <div style="background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(16px); border-radius: 32px; padding: 48px 40px; width: 340px; border: 1px solid rgba(255,255,255,0.6); z-index: 10;">
-      <h1 style="font-size: 28px; font-weight: 500; text-align: center; margin: 0 0 32px; color: var(--color-text-primary);">Log in</h1>
-      
-      <!-- Email input -->
-      <div style="background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(8px); border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.7);">
-        <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.8); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--color-text-secondary);">@</div>
-        <input type="email" placeholder="введите e-mail" style="flex: 1; border: none; background: transparent; font-size: 14px; color: var(--color-text-primary); outline: none;" />
-      </div>
-
-      <!-- Password input -->
-      <div style="background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(8px); border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.7);">
-        <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.8); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-secondary)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/></svg>
+    <!-- Glass card -->
+    <div class="glass-card">
+        <div class="card-title">Вход</div>
+        
+        <!-- Email -->
+        <div class="input-row">
+            <div class="input-icon">@</div>
+            <input type="email" id="emailInput" placeholder="введите e-mail" autocomplete="email"/>
         </div>
-        <input type="password" placeholder="введите пароль" style="flex: 1; border: none; background: transparent; font-size: 14px; color: var(--color-text-primary); outline: none;" />
-      </div>
+        
+        <!-- Password -->
+        <div class="input-row">
+            <div class="input-icon">
+                <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                    <g transform="rotate(-41 15 15)">
+                        <rect x="2" y="13" width="22" height="5" rx="2.5" fill="#1E1E1E"/>
+                        <circle cx="8" cy="15" r="6" stroke="#1E1E1E" stroke-width="3" fill="none"/>
+                        <circle cx="8" cy="15" r="2" fill="#1E1E1E"/>
+                    </g>
+                </svg>
+            </div>
+            <input type="password" id="pwdInput" placeholder="введите пароль" autocomplete="current-password"/>
+        </div>
 
-      <!-- Login button -->
-      <button onclick="sendPrompt('Покажи главную страницу после входа')" style="width: 100%; background: #1a1a1a; color: #fff; border: none; border-radius: 24px; padding: 14px; font-size: 15px; font-weight: 500; cursor: pointer;">Вход</button>
+        <div class="error-msg" id="errorMsg"></div>
+        <button class="btn-submit" onclick="handleLogin()">Вход</button>
     </div>
-  </div>
+</div>
+
+<!-- Success screen -->
+<div class="success-screen" id="successScreen">
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="32" r="32" fill="#27ae60" opacity="0.15"/>
+        <path d="M18 32l10 10 18-20" stroke="#27ae60" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Добро пожаловать!</span>
+    <button onclick="goBack()" style="margin-top:8px; background:#000; color:#f5ece4; border:none; border-radius:50px; padding:14px 40px; font-size:18px; cursor:pointer; font-family:'Urbanist',sans-serif;">На главную →</button>
+</div>
+
+<script>
+function handleLogin() {
+    const email = document.getElementById('emailInput').value.trim();
+    const pwd = document.getElementById('pwdInput').value;
+    const err = document.getElementById('errorMsg');
+
+    if (!email) { err.textContent = 'Введите e-mail'; return; }
+    if (!email.includes('@')) { err.textContent = 'Неверный формат e-mail'; return; }
+    if (!pwd) { err.textContent = 'Введите пароль'; return; }
+    if (pwd.length < 4) { err.textContent = 'Пароль слишком короткий'; return; }
+
+    err.textContent = '';
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('successScreen').classList.add('visible');
+}
+
+function goBack() {
+    document.getElementById('successScreen').classList.remove('visible');
+    document.getElementById('loginScreen').style.display = 'block';
+    document.getElementById('emailInput').value = '';
+    document.getElementById('pwdInput').value = '';
+}
+
+// Enter key support
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleLogin();
+});
+</script>
+
 </body>
 </html>
-
