@@ -82,3 +82,43 @@ class DocumentService:
         if doc.user_id != user_id:
             raise PermissionError("Access denied.")
         return doc
+
+    async def process_upload(
+            self,
+            user_id: uuid.UUID,
+            original_filename: str,
+            saved_as: str,
+            file_size_bytes: int,
+            raw_bytes: bytes,
+    ):
+        from pdf_service import process_file, blocks_to_text
+        from llm.llm_client import summarize
+        from pathlib import Path
+        from config import settings
+        from database.summary import Summary
+
+        file_path = Path(settings.UPLOAD_DIR) / saved_as
+        blocks = process_file(file_path)
+        if not blocks:
+            raise ValueError("No text could be extracted.")
+
+        prompt_text = blocks_to_text(blocks)
+        summary_text = await summarize(prompt_text)
+
+        doc = Document(
+            user_id=user_id,
+            original_filename=original_filename,
+            saved_as=saved_as,
+            file_size_bytes=file_size_bytes,
+            characters_extracted=len(prompt_text),
+            chunks_count=len(blocks),
+        )
+        self.db.add(doc)
+        await self.db.flush()
+
+        summary = Summary(document_id=doc.id, text=summary_text)
+        self.db.add(summary)
+        await self.db.commit()
+        await self.db.refresh(doc)
+        await self.db.refresh(summary)
+        return doc, summary

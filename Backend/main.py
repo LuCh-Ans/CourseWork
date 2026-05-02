@@ -7,8 +7,10 @@ from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
 from auth.authent import router as auth_router
+from auth.documents import router as documents_router
 
 load_dotenv()
+import database  # noqa — регистрирует все модели
 
 from pdf_service import process_file, blocks_to_text
 from llm.llm_client import summarize
@@ -37,38 +39,38 @@ app.add_middleware(
 )
 
 # Подключаем статические файлы
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
 app.include_router(auth_router)
-
+app.include_router(documents_router)
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Главная страница с формой загрузки"""
-    html_path = Path("static/study_ai_upload_home.html")
+    html_path = Path("../frontend/study_ai_upload_home.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page():
     """Страница чата"""
-    html_path = Path("static/study_ai_chat_interface.html")
+    html_path = Path("../frontend/study_ai_chat_interface.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/flashcards", response_class=HTMLResponse)
 async def flashcards_page():
     """Страница карточек"""
-    html_path = Path("static/study_ai_flashcards.html")
+    html_path = Path("../frontend/study_ai_flashcards.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/roadmap", response_class=HTMLResponse)
 async def roadmap_page():
     """Страница роадмапа"""
-    html_path = Path("static/study_ai_roadmap.html")
+    html_path = Path("../frontend/study_ai_roadmap.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page():
     """Страница входа"""
-    html_path = Path("static/study_ai_login.html")
+    html_path = Path("../frontend/study_ai_login.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/test", tags=["Health"])

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sqlalchemy import DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -5,6 +6,7 @@ from pydantic import BaseModel
 import uuid
 from datetime import datetime
 from database.base import Base
+from database.document import DocumentResponse
 
 
 class Summary(Base):
@@ -33,10 +35,11 @@ class SummaryResponse(BaseModel):
     text: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class UploadResponse(BaseModel):
-    document: "DocumentResponse"  # noqa
+    document: DocumentResponse
     summary: SummaryResponse
+
+    model_config = {"from_attributes": True}
