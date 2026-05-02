@@ -1,16 +1,21 @@
 import uuid
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import os
-from dotenv import load_dotenv
+from pydantic import BaseModel
+
+
+from pdf_service import process_file, create_chunks, blocks_to_text 
+from search_service import VectorSearchService
+from llm_client import summarize, call_llm
+
 load_dotenv()
 
-from pdf_service import process_file, blocks_to_text 
-
-from llm_client import summarize
- 
+# --- Конфигурация ---
 UPLOAD_DIR = Path("files/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -18,14 +23,14 @@ ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx"}
 MAX_FILE_SIZE_MB = 10
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
+# --- Инициализация ---
 app = FastAPI(
     title="Study Lab",
-    description=(
-        "Upload educational materials (PDF, TXT, DOCX) "
-        "and receive an AI-generated summary."
-    ),
+    description="Загрузка учебных материалов и ответы на вопросы по ним (RAG).",
     version="0.1.0",
 )
+
+search_service = VectorSearchService()
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,36 +39,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Модели данных ---
+class QuestionRequest(BaseModel):
+    question: str
+
+# --- Эндпоинты ---
 
 @app.get("/test", tags=["Health"])
 async def test() -> JSONResponse:
-    """Smoke-test endpoint. Returns 200 if the server is running."""
     return JSONResponse({"status": "ok", "message": "Server is running."})
 
-
- 
-@app.post("/upload", tags=["Summarization"])
+@app.post("/upload", tags=["Ingestion & Summarization"])
 async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
-
     original_name = file.filename or "unknown"
     suffix = Path(original_name).suffix.lower()
 
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=415,
-            detail=f"File type '{suffix}' is not supported. Allowed: {sorted(ALLOWED_EXTENSIONS)}",
+            detail=f"File type '{suffix}' is not supported.",
         )
 
     raw_bytes = await file.read()
-
-    if not raw_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-
     if len(raw_bytes) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds the {MAX_FILE_SIZE_MB} MB size limit.",
-        )
+        raise HTTPException(status_code=413, detail="File too large.")
 
     unique_name = f"{uuid.uuid4().hex}{suffix}"
     save_path = UPLOAD_DIR / unique_name
@@ -71,29 +70,37 @@ async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
 
     try:
         blocks = process_file(save_path)
+        chunks = create_chunks(blocks)
+        search_service.build_index(chunks)
+        prompt_text = blocks_to_text(blocks)
+        summary = await summarize(prompt_text)
+
+        return JSONResponse({
+            "original_filename": original_name,
+            "saved_as": unique_name,
+            "blocks_count": len(blocks),
+            "summary": summary,
+        })
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Text extraction failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Processing failed: {exc}")
 
-    if not blocks:
-        raise HTTPException(status_code=422, detail="No text could be extracted from the file.")
-
-    prompt_text = blocks_to_text(blocks)
-
+@app.post("/ask", tags=["RAG Query"])
+async def ask_question(request: QuestionRequest):
     try:
-        summary = "SKIPPED_FOR_TESTING" #await summarize(prompt_text)  # строка, не чанки
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        relevant_chunks = search_service.search(request.question, top_k=10
+                                                )
+        print(f"--- DEBUG: Найдено фрагментов: {len(relevant_chunks)}")
+        for i, chunk in enumerate(relevant_chunks):
+            print(f"--- Chunk {i}: {chunk['content'][:100]}...")
 
-    return JSONResponse({
-        "original_filename":    original_name,
-        "saved_as":             unique_name,
-        "characters_extracted": len(prompt_text),
-        "blocks_count":         len(blocks),
-        "summary":              summary,
-    })
+        if not relevant_chunks:
+            return {"answer": "В загруженном документе нет информации по этому вопросу."}
+            
+        context_text = "\n\n".join([c["content"] for c in relevant_chunks])
+        answer = await call_llm(context_text, request.question) 
+        
+        return {"answer": answer}
 
-def _fallback_read_text(raw_bytes: bytes) -> str:
-    try:
-        return raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        return raw_bytes.decode("latin-1")
+    except Exception as e:
+        print(f"Ошибка в /ask: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,125 +1,149 @@
-import os
 import httpx
+from config import settings
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
-
-_ENDPOINTS: dict[str, str] = {
-    "openai": "https://api.openai.com/v1/chat/completions",
-    "qwen":   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    "yagpt":  "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
-}
-
+# Константы промптов
 _SYSTEM_PROMPT = (
-    "You are a helpful academic assistant. "
-    "Your job is to summarize educational materials clearly and concisely."
+    "You are a professional academic assistant for the Study Lab platform. "
+    "Your goal is to help students analyze educational materials accurately and structurally. "
+    "Always use Markdown for formatting (bullet points, bold text, headers) to make the output easy to read."
 )
 
 _USER_PROMPT_TEMPLATE = (
-    "Summarize the following educational material. "
-    "Highlight the main ideas, key concepts, and important conclusions. "
-    "Write in the same language as the source text.\n\n"
+    "Analyze the following educational material fragment. "
+    "Create a concise summary by highlighting: \n"
+    "1. Main ideas and key concepts.\n"
+    "2. Important definitions and formulas.\n"
+    "3. Significant conclusions.\n\n"
+    "IMPORTANT: Write the summary in the same language as the source text.\n\n"
     "Text:\n{text}"
 )
 
 _COMBINE_PROMPT_TEMPLATE = (
-    "Below are summaries of consecutive parts of a single educational document. "
-    "Combine them into one coherent summary. "
-    "Keep the main ideas, key concepts, and important conclusions. "
-    "Write in the same language as the summaries.\n\n"
-    "{text}"
+    "Below are partial summaries of different sections of a single educational document. "
+    "Combine them into one coherent, logically structured final summary. "
+    "Use clear headers and ensure no key information is lost. "
+    "The final output must be professional and formatted with Markdown.\n\n"
+    "IMPORTANT: Write in the same language as the summaries.\n\n"
+    "Summaries:\n{text}"
+)
+_RAG_PROMPT_TEMPLATE = (
+    "You are provided with specific fragments from a document (Context) and a user's question. "
+    "Answer the question based ONLY on the provided context. "
+    "If the context does not contain the answer, strictly reply: 'The document does not provide information on this topic.' "
+    "Do not use any external knowledge or make up facts.\n\n"
+    "CONTEXT:\n{text}\n\n"
+    "USER QUESTION:\n{query}"
 )
 
-
-async def summarize(chunks: list[str]) -> str:
+_ENDPOINTS: dict[str, str] = {
+    "huggingface": "https://router.huggingface.co/v1/chat/completions",
+    "openai": "https://api.openai.com/v1/chat/completions",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/models/{settings.CURRENT_MODEL}:generateContent?key={settings.GEMINI_API_KEY}",
+     "yagpt": "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
+}
+async def call_llm(context: str, query: str) -> str:
     """
-    Accepts a list of text chunks from pdf_service.limit().
-    If one chunk — summarizes directly.
-    If multiple — summarizes each chunk, then merges into one final summary.
+    Универсальная функция для общения с LLM. 
+    Используется для RAG (вопрос-ответ) и суммаризации.
     """
-    if not LLM_API_KEY:
-        raise RuntimeError("LLM_API_KEY environment variable is not set.")
+    if not context or len(context.strip()) < 5:
+        return "Контекст для ответа не найден в базе данных."
+    final_prompt = _RAG_PROMPT_TEMPLATE.format(text=context, query=query)
+    return await _openai_compat_summarize(text="", prompt_template=final_prompt)
+async def summarize(text: str) -> str:
+    """
+    Твоя текущая функция суммаризации. 
+    Она вызывает call_llm (через приватные методы) для обработки чанков.
+    """
+    max_chunk_size = 15000 
+    chunks = [text[i:i+max_chunk_size] for i in range(0, len(text), max_chunk_size)]
 
     if len(chunks) == 1:
-        return await _summarize_chunk(chunks[0], _USER_PROMPT_TEMPLATE)
+        return await _openai_compat_summarize(chunks[0], _USER_PROMPT_TEMPLATE)
 
-    # Map: summarize each chunk separately
     partial_summaries = []
     for i, chunk in enumerate(chunks, start=1):
-        partial = await _summarize_chunk(chunk, _USER_PROMPT_TEMPLATE)
+        partial = await call_llm(chunk, _USER_PROMPT_TEMPLATE)
         partial_summaries.append(f"Part {i}:\n{partial}")
 
-    # Reduce: merge all partial summaries into one
     combined = "\n\n".join(partial_summaries)
-    return await _summarize_chunk(combined, _COMBINE_PROMPT_TEMPLATE)
-
+    return await call_llm(combined, _COMBINE_PROMPT_TEMPLATE)
 
 async def _summarize_chunk(text: str, prompt_template: str) -> str:
-    if LLM_PROVIDER == "yagpt":
+    """Выбор метода суммаризации в зависимости от провайдера"""
+    if settings.CURRENT_PROVIDER == "yagpt":
         return await _yagpt_summarize(text, prompt_template)
     return await _openai_compat_summarize(text, prompt_template)
 
 
 async def _openai_compat_summarize(text: str, prompt_template: str) -> str:
-    endpoint = _ENDPOINTS.get(LLM_PROVIDER)
-    if not endpoint:
-        raise RuntimeError(
-            f"Unknown LLM_PROVIDER='{LLM_PROVIDER}'. "
-            f"Valid options: {list(_ENDPOINTS.keys())}"
-        )
+    """
+    Универсальная функция: поддерживает Gemini и Hugging Face (Qwen).
+    """
+    full_content = f"{prompt_template}\n\n{text}".strip()
 
-    headers = {
-        "Authorization": f"Bearer {LLM_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": LLM_MODEL,
-        "max_tokens": LLM_MAX_TOKENS,
-        "temperature": LLM_TEMPERATURE,
-        "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user",   "content": prompt_template.format(text=text)},
-        ],
-    }
+    async with httpx.AsyncClient() as client:
+        try:
+            if settings.CURRENT_PROVIDER == "gemini":
+                url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{settings.CURRENT_MODEL}:generateContent?key={settings.GEMINI_API_KEY}"
+                )
+                payload = {
+                    "contents": [{"parts": [{"text": full_content}]}],
+                    "generationConfig": {
+                        "maxOutputTokens": settings.LLM_MAX_TOKENS,
+                        "temperature": settings.LLM_TEMPERATURE
+                    }
+                }
+                headers = {"Content-Type": "application/json"}
+            
+            else:
+                url = settings.BASE_URL 
+                headers = {
+                    "Authorization": f"Bearer {settings.HF_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": settings.CURRENT_MODEL,
+                    "messages": [{"role": "user", "content": full_content}],
+                    "max_tokens": settings.LLM_MAX_TOKENS,
+                    "temperature": settings.LLM_TEMPERATURE
+                }
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(endpoint, headers=headers, json=payload)
+            response = await client.post(url, json=payload, headers=headers, timeout=60.0)
+            
+            if response.status_code != 200:
+                print(f"--- {settings.CURRENT_PROVIDER} Error Body: {response.text} ---")
+                raise RuntimeError(f"[{settings.CURRENT_PROVIDER}] Error {response.status_code}")
 
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"[{LLM_PROVIDER.upper()}] API error {response.status_code}: {response.text}"
-        )
+            data = response.json()
+            if settings.CURRENT_PROVIDER == "gemini":
+                return data['candidates'][0]['content']['parts'][0]['text']
+            else:
+                return data['choices'][0]['message']['content']
 
-    data = response.json()
-    try:
-        return data["choices"][0]["message"]["content"].strip()
-    except (KeyError, IndexError) as exc:
-        raise RuntimeError(f"Unexpected response format from {LLM_PROVIDER}: {data}") from exc
-
-
+        except Exception as e:
+            raise RuntimeError(f"LLM request failed: {str(e)}")
 async def _yagpt_summarize(text: str, prompt_template: str) -> str:
-    folder_id = os.getenv("YAGPT_FOLDER_ID", "")
-    if not folder_id:
-        raise RuntimeError("YAGPT_FOLDER_ID environment variable is not set.")
-
+    """Специфичный метод для YandexGPT"""
+    if not settings.YAGPT_FOLDER_ID:
+        raise RuntimeError("YAGPT_FOLDER_ID is not set in .env")
+        
     headers = {
-        "Authorization": f"Api-Key {LLM_API_KEY}",
+        "Authorization": f"Api-Key {settings.LLM_API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "modelUri": f"gpt://{folder_id}/yandexgpt",
+        "modelUri": f"gpt://{settings.YAGPT_FOLDER_ID}/yandexgpt",
         "completionOptions": {
             "stream": False,
-            "temperature": LLM_TEMPERATURE,
-            "maxTokens": str(LLM_MAX_TOKENS),
+            "temperature": settings.LLM_TEMPERATURE,
+            "maxTokens": str(settings.LLM_MAX_TOKENS),
         },
         "messages": [
             {"role": "system", "text": _SYSTEM_PROMPT},
-            {"role": "user",   "text": prompt_template.format(text=text)},
+            {"role": "user", "text": prompt_template.format(text=text)},
         ],
     }
 
