@@ -63,15 +63,12 @@
   /* Headline ABOVE sphere */
   .headline {
     text-align: center;
-    margin-top: 80px; 
-    margin-bottom: -180px; 
-    z-index: 10; 
+    margin-top: 80px;
+    margin-bottom: -180px;
+    z-index: 10;
   }
   .headline p { font-size: 42px; font-weight: 400; color: #111; line-height: 1.35; }
-  .headline strong { 
-    font-weight: 700; 
-    font-size: 42px;
-  }
+  .headline strong { font-weight: 700; font-size: 42px; }
 
   /* Sphere */
   .sphere {
@@ -92,7 +89,7 @@
     z-index: 10;
     margin-top: -280px;
     width: 650px;
-    height: 320px; 
+    height: 320px;
     background: rgba(210, 190, 165, 0.30);
     backdrop-filter: blur(22px);
     -webkit-backdrop-filter: blur(22px);
@@ -104,6 +101,7 @@
     transition: background 0.2s;
   }
   .glass-zone:hover { background: rgba(210,190,165,0.42); }
+  .glass-zone.dragging { background: rgba(210,190,165,0.55); }
 
   .upload-label { font-size: 17px; color: #666; }
   .upload-label strong { color: #111; font-weight: 500; }
@@ -134,15 +132,60 @@
     background: #111; color: #f5ece4; border: none;
     border-radius: 50px; padding: 14px 36px;
     font-size: 15px; cursor: pointer; margin: 0 5px;
-    transition: background 0.2s;
+    transition: background 0.2s, opacity 0.2s;
   }
   .btn-black:hover { background: #333; }
+  .btn-black:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-ghost {
     background: transparent; color: #666;
     border: 1px solid #ccc; border-radius: 50px;
     padding: 14px 28px; font-size: 14px; cursor: pointer; margin: 0 5px;
   }
   .btn-ghost:hover { background: rgba(0,0,0,0.05); }
+
+  /* Upload progress */
+  .upload-progress {
+    display: none;
+    margin-top: 16px;
+  }
+  .upload-progress.show { display: block; }
+  .progress-bar-wrap {
+    background: rgba(0,0,0,0.08);
+    border-radius: 50px;
+    height: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: #FF8D28;
+    border-radius: 50px;
+    width: 0%;
+    transition: width 0.3s;
+    animation: indeterminate 1.2s infinite ease-in-out;
+  }
+  @keyframes indeterminate {
+    0%   { transform: translateX(-100%); width: 60%; }
+    100% { transform: translateX(200%);  width: 60%; }
+  }
+  .progress-text { font-size: 13px; color: #888; }
+
+  /* Error inside overlay */
+  .overlay-error {
+    color: #c0392b;
+    font-size: 13px;
+    margin-top: 12px;
+    min-height: 18px;
+  }
+
+  /* Logout btn */
+  .btn-logout {
+    background: transparent; color: #888;
+    border: 1px solid rgba(0,0,0,0.12); border-radius: 50px;
+    padding: 8px 18px; font-size: 13px; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-logout:hover { background: rgba(0,0,0,0.06); }
 </style>
 </head>
 <body>
@@ -178,34 +221,33 @@
         <div class="user-avatar">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
         </div>
-        <span class="user-name">Username</span>
+        <span class="user-name" id="userName">...</span>
       </div>
-      <button class="btn-projects" onclick="showProjects()">созданные проекты</button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn-projects" onclick="showProjects()">созданные проекты</button>
+        <button class="btn-logout" onclick="handleLogout()">Выйти</button>
+      </div>
     </div>
   </div>
 
   <!-- MAIN -->
   <div class="main">
-
-    <!-- Headline ABOVE sphere -->
     <div class="headline">
       <p>Загрузи материал — получи</p>
       <p><strong>умный конспект</strong></p>
     </div>
 
-    <!-- Sphere -->
     <div class="sphere"></div>
 
-    <!-- Glass zone overlapping sphere bottom -->
     <div class="glass-zone"
+         id="dropZone"
          onclick="document.getElementById('fileInput').click()"
-         ondragover="event.preventDefault(); this.style.background='rgba(210,190,165,0.45)'"
-         ondragleave="this.style.background=''"
+         ondragover="onDragOver(event)"
+         ondragleave="onDragLeave(event)"
          ondrop="handleDrop(event)">
       <p class="upload-label"><strong>перетащи файл</strong> <span> сюда или выбери вручную</span></p>
       <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.txt,.pptx" onchange="handleFile(this.files[0])"/>
     </div>
-
   </div>
 
 </div>
@@ -216,28 +258,149 @@
     <h2>Файл загружен</h2>
     <p>Хочешь создать умный конспект?</p>
     <div class="filename" id="filenameLabel">—</div>
-    <div>
-      <button class="btn-black" onclick="goToProject()">Создать конспект →</button>
+
+    <div class="upload-progress" id="uploadProgress">
+      <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+      <div class="progress-text">Загружаем и анализируем файл…</div>
+    </div>
+
+    <div id="overlayActions">
+      <button class="btn-black" id="createBtn" onclick="goToProject()">Создать конспект →</button>
       <button class="btn-ghost" onclick="closeOverlay()">Отмена</button>
     </div>
+    <div class="overlay-error" id="overlayError"></div>
   </div>
 </div>
 
 <script>
-function handleFile(file) {
-  if (!file) return;
-  document.getElementById('filenameLabel').textContent = file.name;
-  document.getElementById('overlay').classList.add('show');
+const API = 'http://127.0.0.1:8000';
+let pendingFile = null;
+
+// Auth check on load
+async function checkAuth() {
+  try {
+    // try fetching documents — if 401, redirect to login
+    const res = await fetch(`${API}/documents`, { credentials: 'include' });
+    if (res.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
+    const storedName = localStorage.getItem('study_ai_username');
+    if (storedName) {
+      document.getElementById('userName').textContent = storedName;
+    } else {
+      document.getElementById('userName').textContent = 'Пользователь';
+    }
+  } catch (e) {
+    document.getElementById('userName').textContent = 'Пользователь';
+  }
+}
+
+checkAuth();
+
+// Drag & drop 
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.add('dragging');
+}
+function onDragLeave(e) {
+  document.getElementById('dropZone').classList.remove('dragging');
 }
 function handleDrop(e) {
   e.preventDefault();
-  document.querySelector('.glass-zone').style.background = '';
+  document.getElementById('dropZone').classList.remove('dragging');
   const file = e.dataTransfer.files[0];
   if (file) handleFile(file);
 }
-function closeOverlay() { document.getElementById('overlay').classList.remove('show'); }
-function goToProject() { closeOverlay(); sendPrompt('Файл загружен, открой экран проекта с чатом'); }
-function showProjects() { sendPrompt('Покажи созданные проекты'); }
+
+// File selected
+function handleFile(file) {
+  if (!file) return;
+  pendingFile = file;
+  document.getElementById('filenameLabel').textContent = file.name;
+  document.getElementById('overlayError').textContent = '';
+  document.getElementById('uploadProgress').classList.remove('show');
+  document.getElementById('overlayActions').style.display = 'block';
+  document.getElementById('createBtn').disabled = false;
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+  pendingFile = null;
+  document.getElementById('fileInput').value = '';
+}
+
+// Upload to /documents (requires cookie)
+async function goToProject() {
+  if (!pendingFile) return;
+
+  const errEl = document.getElementById('overlayError');
+  const btn = document.getElementById('createBtn');
+  errEl.textContent = '';
+
+  // Show progress, hide buttons
+  document.getElementById('uploadProgress').classList.add('show');
+  document.getElementById('overlayActions').style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('file', pendingFile);
+
+  try {
+    const res = await fetch(`${API}/documents`, {
+      method: 'POST',
+      credentials: 'include',   // sends session_id cookie automatically
+      body: formData
+    });
+
+    if (res.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      document.getElementById('uploadProgress').classList.remove('show');
+      document.getElementById('overlayActions').style.display = 'block';
+      errEl.textContent = data.detail || 'Ошибка при загрузке файла';
+      return;
+    }
+
+    // document.id — переход на страницу конспекта
+    const docId = data.document?.id || data.id;
+    if (docId) {
+      window.location.href = `/documents/${docId}`;
+    } else {
+      // fallback: просто закрыть и сообщить об успехе
+      closeOverlay();
+      alert('Конспект создан!');
+    }
+
+  } catch (e) {
+    document.getElementById('uploadProgress').classList.remove('show');
+    document.getElementById('overlayActions').style.display = 'block';
+    errEl.textContent = 'Ошибка соединения с сервером';
+  }
+}
+
+// Logout
+async function handleLogout() {
+  try {
+    await fetch(`${API}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } finally {
+    localStorage.removeItem('study_ai_username');
+    window.location.href = '/login';
+  }
+}
+
+// Projects 
+function showProjects() {
+  window.location.href = '/documents';
+}
 </script>
 </body>
 </html>
