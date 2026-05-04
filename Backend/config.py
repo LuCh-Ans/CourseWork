@@ -1,26 +1,42 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BASE_DIR = Path(__file__).resolve().parent
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(extra="ignore")
 
-    # PostgreSQL
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/studylab"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://alenapominova@localhost:5432/studylab")
+    SESSION_EXPIRE_SECONDS: int = int(os.getenv("SESSION_EXPIRE_SECONDS", 604800))
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "files/uploads")
+    MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", 10))
 
-    # Sessions
-    SESSION_EXPIRE_SECONDS: int = 7 * 24 * 3600  # 7 дней
+    TESSERACT_PATH: str = os.getenv("TESSERACT_PATH", "/opt/homebrew/bin/tesseract")
+    POPPLER_PATH: str = os.getenv("POPPLER_PATH", "")
 
-    # File upload
-    UPLOAD_DIR: str = "files/uploads"
-    MAX_FILE_SIZE_MB: int = 10
+    
+    HF_API_KEY: str = os.getenv("HF_API_KEY", "") 
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    
 
-    # LLM
-    LLM_PROVIDER: str = "ollama"
-    LLM_API_KEY: str = "ollama"
-    LLM_MODEL: str = "llama 3.2."
-    LLM_MAX_TOKENS: int = 1024
-    LLM_TEMPERATURE: float = 0.3
+    BASE_URL: str = os.getenv("BASE_URL", "https://api-inference.huggingface.co/v1/chat/completions")
 
-
+    CURRENT_PROVIDER: str = os.getenv("CURRENT_PROVIDER", "gemini")
+    CURRENT_MODEL: str = os.getenv("CURRENT_MODEL", "gemini-1.5-flash") # Для HF тут будет Qwen/...
+    
+    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", 1500))
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", 0.5))
 
 settings = Settings()
+
+if __name__ == "__main__":
+    print(f"--- Диагностика конфига ---")
+    print(f"Ищем .env тут: {ENV_PATH}")
+    print(f"Provider: {settings.CURRENT_PROVIDER}")
+    print(f"Model: {settings.CURRENT_MODEL}")
+    print(f"Base URL: {settings.BASE_URL}")
+    print(f"HF_KEY: {'ОК' if settings.HF_API_KEY else 'ПУСТО'}")

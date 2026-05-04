@@ -1,1 +1,29 @@
-/.env.example
+# Виртуальные окружения
+venv/
+venv_new/
+.venv/
+env/
+st_faiss/
+
+# Кэш Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Установщики
+Miniconda3-*.sh
+
+# Загруженные файлы
+files/uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Системные файлы Mac
+.DS_Store
+
+.env.env
+.env

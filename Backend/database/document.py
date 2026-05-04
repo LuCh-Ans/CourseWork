@@ -59,8 +59,10 @@ class DocumentService:
         self.db = db
 
     async def list_documents(self, user_id: uuid.UUID, offset: int, limit: int):
+        from sqlalchemy.orm import joinedload
         result = await self.db.execute(
             select(Document)
+            .options(joinedload(Document.summary))
             .where(Document.user_id == user_id)
             .offset(offset)
             .limit(limit)
@@ -73,8 +75,11 @@ class DocumentService:
         return docs, total
 
     async def get_document(self, document_id: uuid.UUID, user_id: uuid.UUID):
+        from sqlalchemy.orm import joinedload
         result = await self.db.execute(
-            select(Document).where(Document.id == document_id)
+            select(Document)
+            .options(joinedload(Document.summary))
+            .where(Document.id == document_id)
         )
         doc = result.scalar_one_or_none()
         if not doc:

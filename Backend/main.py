@@ -2,32 +2,31 @@ import uuid
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-import os
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
-from auth.authent import router as auth_router
-from auth.documents import router as documents_router
+from pydantic import BaseModel
+from typing import List
 
 load_dotenv()
 import database  # noqa — регистрирует все модели
 
-from pdf_service import process_file, blocks_to_text
-from llm.llm_client import summarize
+from pdf_service import process_file, create_chunks, blocks_to_text
+from vector_search import VectorSearchService
+from llm.llm_client import summarize, call_llm
+from auth.authent import router as auth_router
+from auth.documents import router as documents_router
 
 UPLOAD_DIR = Path("files/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx"}
 MAX_FILE_SIZE_MB = 10
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 app = FastAPI(
     title="Study Lab",
-    description=(
-        "Upload educational materials (PDF, TXT, DOCX) "
-        "and receive an AI-generated summary."
-    ),
+    description="Upload educational materials (PDF, TXT, DOCX) and receive an AI-generated summary.",
     version="0.1.0",
 )
 
@@ -38,45 +37,92 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Подключаем статические файлы
 app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
 app.include_router(auth_router)
 app.include_router(documents_router)
+
+search_service = VectorSearchService()
+
+class QuestionRequest(BaseModel):
+    question: str
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    system: str = ""
+
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    """Главная страница с формой загрузки"""
+async def home_page():
     html_path = Path("../frontend/study_ai_upload_home.html")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    html_path = Path("../frontend/study_ai_login.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page():
-    """Страница чата"""
     html_path = Path("../frontend/study_ai_chat_interface.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/flashcards", response_class=HTMLResponse)
 async def flashcards_page():
-    """Страница карточек"""
     html_path = Path("../frontend/study_ai_flashcards.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/roadmap", response_class=HTMLResponse)
 async def roadmap_page():
-    """Страница роадмапа"""
     html_path = Path("../frontend/study_ai_roadmap.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
-@app.get("/login", response_class=HTMLResponse)
-async def login_page():
-    """Страница входа"""
-    html_path = Path("../frontend/study_ai_login.html")
+@app.get("/view/{doc_id}", response_class=HTMLResponse)
+async def document_page(doc_id: str):
+    html_path = Path("../frontend/study_ai_chat_interface.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/test", tags=["Health"])
 async def test() -> JSONResponse:
-    """Smoke-test endpoint. Returns 200 if the server is running."""
     return JSONResponse({"status": "ok", "message": "Server is running."})
+
+@app.post("/chat", tags=["Chat"])
+async def chat_endpoint(request: ChatRequest):
+    """Прокси к LLM для чат-интерфейса"""
+    try:
+        from llm.llm_client import _openai_compat_summarize
+        history_lines = []
+        for m in request.messages:
+            prefix = "Пользователь" if m.role == "user" else "Ассистент"
+            history_lines.append(f"{prefix}: {m.content}")
+
+        history_text = "\n".join(history_lines)
+        system_part = f"{request.system}\n\n" if request.system else ""
+        full_text = f"{system_part}{history_text}"
+
+        last_user = next(
+            (m.content for m in reversed(request.messages) if m.role == "user"), ""
+        )
+
+        answer = await _openai_compat_summarize(full_text, last_user)
+        return {"answer": answer}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/ask", tags=["RAG Query"])
+async def ask_question(request: QuestionRequest):
+    try:
+        relevant_chunks = search_service.search(request.question, top_k=10)
+        if not relevant_chunks:
+            return {"answer": "В загруженном документе нет информации по этому вопросу."}
+        context_text = "\n\n".join([c["content"] for c in relevant_chunks])
+        answer = await call_llm(context_text, request.question)
+        return {"answer": answer}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload", tags=["Summarization"])
 async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
@@ -104,14 +150,12 @@ async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
     save_path = UPLOAD_DIR / unique_name
     save_path.write_bytes(raw_bytes)
 
-    try:
-        blocks = process_file(save_path)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Text extraction failed: {exc}") from exc
-
+    blocks = process_file(save_path)
     if not blocks:
         raise HTTPException(status_code=422, detail="No text could be extracted from the file.")
 
+    chunks = create_chunks(blocks)
+    search_service.build_index(chunks)
     prompt_text = blocks_to_text(blocks)
 
     try:
@@ -126,9 +170,3 @@ async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
         "blocks_count": len(blocks),
         "summary": summary,
     })
-
-def _fallback_read_text(raw_bytes: bytes) -> str:
-    try:
-        return raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        return raw_bytes.decode("latin-1")

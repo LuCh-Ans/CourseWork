@@ -27,3 +27,13 @@ pydantic-settings>=2.0.0
 sqlalchemy>=2.0.0
 asyncpg>=0.29.0
 alembic>=1.13.0
+
+# Auth
+bcrypt>=4.0.0
+passlib[bcrypt]>=1.7.4
+
+# ML / Vector search (устанавливать через conda, не pip!)
+# conda install -c conda-forge faiss-cpu nomkl
+# pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0
+# pip install transformers==4.44.0
+# pip install sentence-transformers==2.7.0

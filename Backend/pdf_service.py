@@ -4,17 +4,20 @@ from pdfminer.high_level import extract_pages
 from pdfminer.layout import LTTextContainer, LTChar, LTRect, LTFigure
 from PIL import Image
 from pdf2image import convert_from_path
-import pytesseract
+import pytesseract 
 import os
 from pathlib import Path
 from docx import Document
 
-pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
+from dotenv import load_dotenv
+
+load_dotenv()
+ 
+pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_PATH", r"tesseract")
 POPPLER_PATH = None
 
-
-
 def extract_text(file_path: Path) -> list[dict]:
+    file_path = Path(file_path)
     suffix = file_path.suffix.lower()
     if suffix == ".docx":
         return extract_text_docx(file_path)
@@ -33,22 +36,27 @@ def extract_text(file_path: Path) -> list[dict]:
     else:
         raise ValueError(f"Формат {suffix} не поддерживается процессором.")
 
-
 def extract_text_pdf(pdf: Path) -> list[dict]:
     content_blocks: list[dict] = []
     pdf_path_str = str(pdf)
     curr_section = 'General'
-
+    images = convert_from_path(pdf_path_str, poppler_path=POPPLER_PATH)
     with pdfplumber.open(pdf_path_str) as f:
         for page_num, page in enumerate(f.pages):
             page_text = page.extract_text()
+            if not page_text or len(page_text.strip()) < 10:
+                image = images[page_num]
+                page_text = pytesseract.image_to_string(image, lang='rus+eng')
+                block_type = "ocr"
+            else:
+                block_type = "text"
             if page_text:
                 for line in page_text.split('\n'):
                     line = line.strip()
                     if not line:
                         continue
                     is_heading = len(line) < 80 and not line.endswith('.')
-
+            
                     if is_heading:
                         curr_section = line
                         content_blocks.append({
@@ -86,23 +94,9 @@ def extract_text_pdf(pdf: Path) -> list[dict]:
                                 "row_index": row_idx
                             }
                         })
-
-    images = convert_from_path(pdf_path_str)
-    for page_num, image in enumerate(images):
-        ocr_text = pytesseract.image_to_string(image).strip()
-        if ocr_text:
-            content_blocks.append({
-                "content": ocr_text,
-                "metadata": {
-                    "source": pdf.name,
-                    "section": curr_section,
-                    "type": "ocr",
-                    "page": page_num + 1
-                }
-            })
-
+     
+     
     return content_blocks
-
 
 def extract_text_docx(file_path: Path) -> list[dict]:
     doc = Document(file_path)
@@ -120,7 +114,7 @@ def extract_text_docx(file_path: Path) -> list[dict]:
                     "source": file_path.name,
                     "section": curr_section,
                     "type": "heading",
-                    "level": paragraph.style.name
+                    "level": paragraph.style.name   
                 }
             })
             continue
@@ -146,9 +140,8 @@ def extract_text_docx(file_path: Path) -> list[dict]:
                         "row_index": row_in
                     }
                 })
-
+    
     return content_blocks
-
 
 def clean_text(text: str) -> str:
     line = text.split('\n')
@@ -161,33 +154,6 @@ def clean_text(text: str) -> str:
     return result
 
 
-'''
-
-def limit(text, max_size = 5000):
-    threshold = [text[i:i+max_size] for i in range(0, len(text), max_size)]
-    return threshold
-
-#analyzing
-def analyze_pdf(pdf):
-    for page_num, page_layout in enumerate(extract_pages(pdf)):
-        print("Page:", page_num + 1)
-        for element in page_layout:
-            if isinstance(element, LTTextContainer):
-                print("Text")
-            elif isinstance(element, LTFigure):
-                print("Image")
-            elif isinstance(element, LTRect):
-                print("Graphic/Table")
-
- '''
-
-'''def process(pdf):
-    pdf = "Example PDF.pdf"
-    raw_text = extract_text(pdf)
-    cleaned_text = clean_text(raw_text)
-    chunks = limit(cleaned_text)
-    print(chunks)'''
-
 
 def process_file(file_path: Path) -> list[dict]:
     blocks = extract_text(file_path)
@@ -197,7 +163,6 @@ def process_file(file_path: Path) -> list[dict]:
         if clean_text(b["content"])
     ]
     return blocks
-
 
 def blocks_to_text(blocks: list[dict], max_length: int = 120_000) -> str:
     lines = []
@@ -228,3 +193,23 @@ def blocks_to_text(blocks: list[dict], max_length: int = 120_000) -> str:
     if truncated:
         text += "\n\n... (документ обрезан)"
     return text
+
+def create_chunks(blocks: list, chunk_size: int = 600, chunk_overlap: int = 150):
+    """
+    Разбивает текст блоков на чанки с перекрытием.
+    chunk_size: макс. количество символов в одном фрагменте.
+    chunk_overlap: сколько символов из конца предыдущего чанка попадет в начало следующего.
+    """
+    full_text = " ".join([b["content"] for b in blocks])
+    chunks = []
+    if len(full_text) <= chunk_size:
+        return [{"content": full_text}]
+
+    start = 0
+    while start < len(full_text):
+        end = start + chunk_size
+        chunk_content = full_text[start:end]
+        chunks.append({"content": chunk_content.strip()})
+        start += (chunk_size - chunk_overlap)
+    return chunks
+ 

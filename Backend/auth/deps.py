@@ -16,7 +16,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated.",
         )
-    from CourseWork.Backend.auth.auth_service import AuthService
+    from auth.auth_service import AuthService
     user = await AuthService(db).get_user_by_session(session_id)
     if not user or not user.is_active:
         raise HTTPException(
