@@ -9,15 +9,15 @@ SESSION_COOKIE_NAME = "session_id"
 
 async def get_current_user(
     db: AsyncSession = Depends(get_db),
-    session_id: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    auth_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> User:
-    if not session_id:
+    if not auth_cookie:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated.",
         )
     from auth.auth_service import AuthService
-    user = await AuthService(db).get_user_by_session(session_id)
+    user = await AuthService(db).get_user_by_session(auth_cookie)
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

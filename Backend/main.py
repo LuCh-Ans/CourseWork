@@ -17,6 +17,7 @@ from vector_search import VectorSearchService
 from llm.llm_client import summarize, call_llm
 from auth.authent import router as auth_router
 from auth.documents import router as documents_router
+from auth.chat_router import router as chat_router
 
 UPLOAD_DIR = Path("files/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -41,7 +42,7 @@ app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
 app.include_router(auth_router)
 app.include_router(documents_router)
-
+app.include_router(chat_router)
 search_service = VectorSearchService()
 
 class QuestionRequest(BaseModel):
@@ -57,32 +58,32 @@ class ChatRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def home_page():
-    html_path = Path("../frontend/study_ai_upload_home.html")
+    html_path = Path("../frontend/study_ai_combined.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page():
-    html_path = Path("../frontend/study_ai_login.html")
+    html_path = Path("../frontend/study_ai_combined.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page():
-    html_path = Path("../frontend/study_ai_chat_interface.html")
+    html_path = Path("../frontend/study_ai_combined.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/flashcards", response_class=HTMLResponse)
 async def flashcards_page():
-    html_path = Path("../frontend/study_ai_flashcards.html")
+    html_path = Path("../frontend/study_ai_combined.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/roadmap", response_class=HTMLResponse)
 async def roadmap_page():
-    html_path = Path("../frontend/study_ai_roadmap.html")
+    html_path = Path("../frontend/study_ai_combined.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/view/{doc_id}", response_class=HTMLResponse)
 async def document_page(doc_id: str):
-    html_path = Path("../frontend/study_ai_chat_interface.html")
+    html_path = Path("../frontend/study_ai_combined.html")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.get("/test", tags=["Health"])
