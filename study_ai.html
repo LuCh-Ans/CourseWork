@@ -408,7 +408,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
 .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); background: rgba(26,26,26,.9); color: #fff; border-radius: 14px; padding: 12px 20px; font-size: 13px; z-index: 9999; animation: fi .3s ease; display: none; }
 .toast.show { display: block; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 
@@ -555,6 +554,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
         <circle cx="55.701" cy="32.966" r="4.362" fill="#D9D9D9"/>
         <circle cx="56.574" cy="32.093" r="1.745" fill="currentColor"/>
         <path d="M73.407 13.313C75.919 16.813 75.657 21.3 70.989 24.652C66.32 28.004 64.088 27.785 61.575 24.285C59.063 20.786 61.623 24.597 66.292 21.246C70.96 17.894 70.894 9.814 73.407 13.313Z" fill="currentColor"/>
+        <path d="M55.4 114.1C54.121 114.06 53.234 109.725 53.539 100.985C53.844 92.246 54.373 89.696 55.652 89.736C56.931 89.776 56.006 89.202 55.702 97.941C55.397 106.68 56.679 114.14 55.4 114.1Z" fill="currentColor"/>
+        <path d="M45.894 113.281C46.503 112.155 50.282 109.168 56.617 113.482C63.513 117.216 65.585 124.555 60.886 124.892C60.277 126.017 62.632 118.956 55.736 115.222C48.841 111.488 45.284 114.406 45.894 113.281Z" fill="currentColor"/>
+        <path d="M55.456 112.635L55.393 113.269C55.675 113.704 57.725 113.846 57.973 114.402C61.254 119.823 58.378 124.208 54.549 122.774C53.454 123.437 59.185 118.748 55.903 113.326C55.756 113.083 55.607 112.853 55.456 112.635Z" fill="currentColor"/>
+        <path d="M72.397 113.3C75.904 119.34 73.554 122.755 74.579 122.09C75.547 121.462 77.821 118.142 74.733 113.114L72.397 113.3Z" fill="currentColor"/>
+        <path d="M61.016 113.662C61.394 112.44 64.517 108.772 71.572 111.765C79.064 114.081 82.53 120.875 77.988 122.122C77.61 123.345 78.54 115.96 71.048 113.644C63.556 111.329 60.638 114.885 61.016 113.662Z" fill="currentColor"/>
+        <path d="M69.221 112.356C67.601 112.302 66.441 109.697 66.704 101.726C66.967 93.756 67.601 91.436 69.221 91.49C70.841 91.543 69.122 91.288 68.859 99.258C68.595 107.229 70.841 112.409 69.221 112.356Z" fill="currentColor"/>
       </svg>
       <span class="home-logo-text">Study AI</span>
     </div>
@@ -1015,7 +1020,10 @@ function getChatContext(chat) {
 }
 
 function renderText(t){
-  return marked.parse(String(t));
+  return String(t)
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^[•\-] (.+)$/gm,'<div style="margin-left:14px;margin-bottom:4px"><span style="opacity:.4">•</span> $1</div>')
+    .replace(/\n/g,'<br>');
 }
 
 function scrollBottom(){ const el=gid('messages'); el.scrollTop=el.scrollHeight; }
