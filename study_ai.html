@@ -408,6 +408,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
 .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); background: rgba(26,26,26,.9); color: #fff; border-radius: 14px; padding: 12px 20px; font-size: 13px; z-index: 9999; animation: fi .3s ease; display: none; }
 .toast.show { display: block; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 
@@ -628,6 +629,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
         <circle cx="55.701" cy="32.966" r="4.362" fill="#D9D9D9"/>
         <circle cx="56.574" cy="32.093" r="1.745" fill="currentColor"/>
         <path d="M73.407 13.313C75.919 16.813 75.657 21.3 70.989 24.652C66.32 28.004 64.088 27.785 61.575 24.285C59.063 20.786 61.623 24.597 66.292 21.246C70.96 17.894 70.894 9.814 73.407 13.313Z" fill="currentColor"/>
+        <path d="M55.4 114.1C54.121 114.06 53.234 109.725 53.539 100.985C53.844 92.246 54.373 89.696 55.652 89.736C56.931 89.776 56.006 89.202 55.702 97.941C55.397 106.68 56.679 114.14 55.4 114.1Z" fill="currentColor"/>
+        <path d="M45.894 113.281C46.503 112.155 50.282 109.168 56.617 113.482C63.513 117.216 65.585 124.555 60.886 124.892C60.277 126.017 62.632 118.956 55.736 115.222C48.841 111.488 45.284 114.406 45.894 113.281Z" fill="currentColor"/>
+        <path d="M55.456 112.635L55.393 113.269C55.675 113.704 57.725 113.846 57.973 114.402C61.254 119.823 58.378 124.208 54.549 122.774C53.454 123.437 59.185 118.748 55.903 113.326C55.756 113.083 55.607 112.853 55.456 112.635Z" fill="currentColor"/>
+        <path d="M72.397 113.3C75.904 119.34 73.554 122.755 74.579 122.09C75.547 121.462 77.821 118.142 74.733 113.114L72.397 113.3Z" fill="currentColor"/>
+        <path d="M61.016 113.662C61.394 112.44 64.517 108.772 71.572 111.765C79.064 114.081 82.53 120.875 77.988 122.122C77.61 123.345 78.54 115.96 71.048 113.644C63.556 111.329 60.638 114.885 61.016 113.662Z" fill="currentColor"/>
+        <path d="M69.221 112.356C67.601 112.302 66.441 109.697 66.704 101.726C66.967 93.756 67.601 91.436 69.221 91.49C70.841 91.543 69.122 91.288 68.859 99.258C68.595 107.229 70.841 112.409 69.221 112.356Z" fill="currentColor"/>
       </svg>
       <span class="sidebar-logo-text">Study AI</span>
     </div>
@@ -955,25 +962,7 @@ async function openFileInChat() {
   const file = pendingHomeFile;
   closeHomeOverlay();
   showScreen('chat');
-  // read and auto-send
-  try {
-    let text = await readFileAsText(file);
-    const MAX = 30000;
-    if (text.length > MAX) { text = text.slice(0, MAX); showToast('Файл обрезан до ' + MAX + ' символов'); }
-    attachedFileText = text;
-    attachedFileName = file.name;
-    gid('file-badge-name').textContent = file.name;
-    gid('file-badge').classList.add('show');
-    const chat = activeChat();
-    if (chat && chat.history.length === 0) {
-      const name = file.name.replace(/\.[^.]+$/, '');
-      chat.title = name.length > 32 ? name.slice(0,30)+'...' : name;
-      gid('chat-title').textContent = chat.title;
-      renderHistory();
-    }
-    gid('chat-input').value = `Я загрузил файл «${file.name}». Пожалуйста, сделай краткое резюме его содержания.`;
-    sendMessage();
-  } catch(e) { showToast('Не удалось прочитать файл: ' + e.message); }
+  await uploadFileToBacked(file);
 }
 
 // SCREEN 3 — CHAT APP logic
@@ -1000,15 +989,15 @@ function showToast(msg, duration=3000) {
 }
 
 async function callAI(messages, system, maxTokens=1000) {
-  const body = { model: MODEL, max_tokens: maxTokens, messages };
-  if (system) body.system = system;
-  const res = await fetch(ANTHROPIC_API, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+  const res = await fetch(API_BACKEND + '/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ messages, system: system || '' })
   });
-  if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error?.message || `HTTP ${res.status}`); }
+  if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.detail || `HTTP ${res.status}`); }
   const data = await res.json();
-  return data.content?.filter(b=>b.type==='text').map(b=>b.text).join('') || '';
+  return data.answer || '';
 }
 
 function parseJSON(raw) {
@@ -1026,10 +1015,7 @@ function getChatContext(chat) {
 }
 
 function renderText(t){
-  return String(t)
-    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-    .replace(/^[•\-] (.+)$/gm,'<div style="margin-left:14px;margin-bottom:4px"><span style="opacity:.4">•</span> $1</div>')
-    .replace(/\n/g,'<br>');
+  return marked.parse(String(t));
 }
 
 function scrollBottom(){ const el=gid('messages'); el.scrollTop=el.scrollHeight; }
@@ -1058,12 +1044,19 @@ function deleteChat(id){
 
 function switchChat(id){
   activeChatId=id; const chat=activeChat();
+  closeAllPanels(); // закрываем карточки/роадмап при смене чата
   gid('chat-title').textContent=chat.title;
   const msgs=gid('messages'); msgs.innerHTML='';
   if(chat.messages.length===0){
     msgs.innerHTML='<div class="msg msg-ai" style="color:rgba(26,26,26,.48);font-size:13px">Привет! Я Study AI — твой умный помощник в учёбе.</div>';
   } else {
     chat.messages.forEach(m=>{ const d=document.createElement('div'); d.className='msg '+(m.role==='user'?'msg-user':'msg-ai'); d.innerHTML=renderText(m.content); msgs.appendChild(d); });
+  }
+  // показать значок "карточки сохранены" если они есть
+  if (chat.cards && chat.cards.length > 0) {
+    gid('btn-cards').textContent = `Карточки (${chat.cards.length})`;
+  } else {
+    gid('btn-cards').textContent = 'Карточки';
   }
   scrollBottom(); renderHistory();
   gid('hist-panel').classList.remove('open'); gid('chevron').classList.remove('open');
@@ -1126,17 +1119,43 @@ let attachedFileName = null;
 
 async function handleFileUpload(input) {
   const file = input.files[0]; if(!file) return; input.value='';
-  const MAX=30000; let text='';
-  try { text=await readFileAsText(file); } catch(e){ showToast('Не удалось прочитать файл: '+e.message); return; }
-  if(!text.trim()){ showToast('Файл пустой'); return; }
-  if(text.length>MAX){ text=text.slice(0,MAX); showToast('Файл обрезан до '+MAX+' символов'); }
-  attachedFileText=text; attachedFileName=file.name;
-  gid('file-badge-name').textContent=file.name; gid('file-badge').classList.add('show');
-  const chat=activeChat();
-  if(chat&&chat.history.length===0){ const name=file.name.replace(/\.[^.]+$/,''); chat.title=name.length>32?name.slice(0,30)+'...':name; gid('chat-title').textContent=chat.title; renderHistory(); }
-  gid('chat-input').value=`Я загрузил файл «${file.name}». Пожалуйста, сделай краткое резюме его содержания и скажи, что ты можешь с ним сделать.`;
-  sendMessage();
+  await uploadFileToBacked(file);
 }
+async function uploadFileToBacked(file) {
+  const chat = activeChat();
+  const thinkEl = showThinking();
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch(API_BACKEND + '/documents', {
+      method: 'POST', credentials: 'include', body: formData
+    });
+    thinkEl.remove();
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      showToast('Ошибка загрузки: ' + (err.detail || res.status));
+      return;
+    }
+    const data = await res.json();
+    const summary = data?.summary?.text || '';
+    const filename = data?.document?.original_filename || file.name;
+    attachedFileText = summary;
+    attachedFileName = filename;
+    gid('file-badge-name').textContent = filename;
+    gid('file-badge').classList.add('show');
+    if (chat && chat.history.length === 0) {
+      const name = filename.replace(/\.[^.]+$/, '');
+      chat.title = name.length > 32 ? name.slice(0,30)+'...' : name;
+      gid('chat-title').textContent = chat.title;
+      renderHistory();
+    }
+    appendMsg('assistant', `✅ Файл **${filename}** загружен и проанализирован. Задавай вопросы по его содержанию!`, chat);
+  } catch(e) {
+    thinkEl.remove();
+    showToast('Ошибка соединения с сервером');
+  }
+}
+
 
 function readFileAsText(file) {
   return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=e=>resolve(e.target.result); r.onerror=()=>reject(new Error('Ошибка чтения')); r.readAsText(file,'UTF-8'); });
@@ -1144,108 +1163,246 @@ function readFileAsText(file) {
 
 function removeFile(){ attachedFileText=null; attachedFileName=null; gid('file-badge').classList.remove('show'); }
 
-// ── FLASHCARDS ──
-let fcCards=[],fcIndex=0,fcFlipped=false,fcWrong=0,fcRight=0;
+// ── FLASHCARDS (per-chat saved) ──
+let fcIndex=0, fcFlipped=false, fcWrong=0, fcRight=0;
 
-const CROW_SVG=`<svg width="56" height="70" viewBox="0 0 97 126" fill="none" style="color:#1a1a1a"><path d="M78.627 45.624C88.622 64.047 91.21 71.933 76.105 80.128C60.999 88.322 41.44 89.643 31.446 71.219C21.451 52.795 29.013 29.362 44.119 21.167C59.225 12.972 68.632 27.2 78.627 45.624Z" fill="currentColor"/><path d="M21.677 94.908C14.163 108.54 16.716 111.497 12.759 109.046C8.802 106.595 4.567 94.582 12.08 80.949C19.594 67.317 36.012 56.215 39.968 58.666C43.925 61.117 29.191 81.276 21.677 94.908Z" fill="currentColor"/><path d="M15.434 62.751C7.246 75.991 2.946 74.962 7.621 77.533C12.296 80.103 26.063 78.561 34.251 65.321C42.439 52.081 42.893 31.693 38.218 29.123C33.543 26.553 23.622 49.512 15.434 62.751Z" fill="currentColor"/><path d="M78.368 31.052C93.929 30.816 95.3 24.202 95.176 27.269C95.052 30.335 86.704 40.909 71.143 41.144C55.582 41.38 37.722 35.703 37.846 32.636C37.97 29.57 62.807 31.287 78.368 31.052Z" fill="currentColor"/><path d="M53.527 75.451C62.746 62.903 67.734 64.773 62.285 61.201C56.836 57.63 40.955 56.769 31.736 69.317C22.518 81.865 22.367 103.39 27.816 106.961C33.265 110.532 44.309 87.998 53.527 75.451Z" fill="currentColor"/><path d="M76.664 81.636C80.877 74.43 84.671 76.269 80.258 73.248C75.846 70.226 67.074 66.401 62.861 73.606C58.648 80.812 62.892 90.532 67.304 93.553C71.717 96.575 72.451 88.841 76.664 81.636Z" fill="currentColor"/><path d="M62.7 84.438C67.444 77.373 71.368 80.653 65.756 77.314C60.143 73.975 49.119 69.552 44.376 76.617C39.632 83.682 46.3 92.639 51.913 95.978C57.525 99.317 57.957 91.503 62.7 84.438Z" fill="currentColor"/><circle cx="55.701" cy="32.966" r="4.362" fill="#D9D9D9"/><circle cx="56.574" cy="32.093" r="1.745" fill="currentColor"/></svg>`;
+const CROW_SVG=`<svg width="56" height="70" viewBox="0 0 97 126" fill="none" style="color:#1a1a1a">
+<path d="M78.627 45.624C88.622 64.047 91.21 71.933 76.105 80.128C60.999 88.322 41.44 89.643 31.446 71.219C21.451 52.795 29.013 29.362 44.119 21.167C59.225 12.972 68.632 27.2 78.627 45.624Z" fill="currentColor"/>
+<path d="M21.677 94.908C14.163 108.54 16.716 111.497 12.759 109.046C8.802 106.595 4.567 94.582 12.08 80.949C19.594 67.317 36.012 56.215 39.968 58.666C43.925 61.117 29.191 81.276 21.677 94.908Z" fill="currentColor"/>
+<path d="M15.434 62.751C7.246 75.991 2.946 74.962 7.621 77.533C12.296 80.103 26.063 78.561 34.251 65.321C42.439 52.081 42.893 31.693 38.218 29.123C33.543 26.553 23.622 49.512 15.434 62.751Z" fill="currentColor"/>
+<path d="M78.368 31.052C93.929 30.816 95.3 24.202 95.176 27.269C95.052 30.335 86.704 40.909 71.143 41.144C55.582 41.38 37.722 35.703 37.846 32.636C37.97 29.57 62.807 31.287 78.368 31.052Z" fill="currentColor"/>
+<path d="M53.527 75.451C62.746 62.903 67.734 64.773 62.285 61.201C56.836 57.63 40.955 56.769 31.736 69.317C22.518 81.865 22.367 103.39 27.816 106.961C33.265 110.532 44.309 87.998 53.527 75.451Z" fill="currentColor"/>
+<path d="M76.664 81.636C80.877 74.43 84.671 76.269 80.258 73.248C75.846 70.226 67.074 66.401 62.861 73.606C58.648 80.812 62.892 90.532 67.304 93.553C71.717 96.575 72.451 88.841 76.664 81.636Z" fill="currentColor"/>
+<path d="M62.7 84.438C67.444 77.373 71.368 80.653 65.756 77.314C60.143 73.975 49.119 69.552 44.376 76.617C39.632 83.682 46.3 92.639 51.913 95.978C57.525 99.317 57.957 91.503 62.7 84.438Z" fill="currentColor"/>
+<path d="M73.611 27.569C75.377 22.698 76.837 17.628 78.455 12.706C81.213 4.316 86.879-1.869 82.798 0.525C81.545 1.26 80.411 2.21 79.373 3.227C71.281 11.152 66.148 19.89 66.175 31.987C66.2 43.575 64.12 45.519 70.28 39.705C71.836 38.236 73.307 36.627 74.421 34.8C78.332 28.384 71.072 34.572 73.611 27.569Z" fill="currentColor"/>
+<circle cx="55.701" cy="32.966" r="4.362" fill="#D9D9D9"/>
+<circle cx="56.574" cy="32.093" r="1.745" fill="currentColor"/>
+<path d="M73.407 13.313C75.919 16.813 75.657 21.3 70.989 24.652C66.32 28.004 64.088 27.785 61.575 24.285C59.063 20.786 61.623 24.597 66.292 21.246C70.96 17.894 70.894 9.814 73.407 13.313Z" fill="currentColor"/>
+<path d="M55.4 114.1C54.121 114.06 53.234 109.725 53.539 100.985C53.844 92.246 54.373 89.696 55.652 89.736C56.931 89.776 56.006 89.202 55.702 97.941C55.397 106.68 56.679 114.14 55.4 114.1Z" fill="currentColor"/>
+<path d="M45.894 113.281C46.503 112.155 50.282 109.168 56.617 113.482C63.513 117.216 65.585 124.555 60.886 124.892C60.277 126.017 62.632 118.956 55.736 115.222C48.841 111.488 45.284 114.406 45.894 113.281Z" fill="currentColor"/>
+<path d="M55.456 112.635L55.393 113.269C55.675 113.704 57.725 113.846 57.973 114.402C61.254 119.823 58.378 124.208 54.549 122.774C53.454 123.437 59.185 118.748 55.903 113.326C55.756 113.083 55.607 112.853 55.456 112.635Z" fill="currentColor"/>
+<path d="M72.397 113.3C75.904 119.34 73.554 122.755 74.579 122.09C75.547 121.462 77.821 118.142 74.733 113.114L72.397 113.3Z" fill="currentColor"/>
+<path d="M61.016 113.662C61.394 112.44 64.517 108.772 71.572 111.765C79.064 114.081 82.53 120.875 77.988 122.122C77.61 123.345 78.54 115.96 71.048 113.644C63.556 111.329 60.638 114.885 61.016 113.662Z" fill="currentColor"/>
+<path d="M69.221 112.356C67.601 112.302 66.441 109.697 66.704 101.726C66.967 93.756 67.601 91.436 69.221 91.49C70.841 91.543 69.122 91.288 68.859 99.258C68.595 107.229 70.841 112.409 69.221 112.356Z" fill="currentColor"/>
+</svg>`;
 
-async function openCards(){
-  const chat=activeChat(); const title=chat?chat.title:'Новый чат';
-  gid('cards-title').textContent=title;
-  gid('cards-panel').classList.add('open');
-  document.querySelector('.main').style.display='none';
-  gid('btn-cards').style.background='rgba(245,166,35,.35)';
-  gid('cards-body').innerHTML='<div class="cards-generating"><div class="spinner"></div><span>ИИ генерирует карточки...</span></div>';
-  const context=getChatContext(chat);
-  const prompt=context
-    ?`На основе этого диалога создай ровно 8 карточек для повторения. Верни ТОЛЬКО JSON без пояснений: [{"q":"вопрос","a":"ответ"}, ...]\n\n${context}`
-    :`Создай 8 карточек по теме: "${title}". Верни ТОЛЬКО JSON: [{"q":"вопрос","a":"ответ"}, ...]`;
-  try {
-    const raw=await callAI([{role:'user',content:prompt}],null,1200);
-    fcCards=parseJSON(raw);
-    if(!Array.isArray(fcCards)||fcCards.length===0) throw new Error('Пустой массив');
-  } catch(e){ showToast('Ошибка карточек: '+e.message); closeCards(); return; }
-  fcIndex=0;fcFlipped=false;fcWrong=0;fcRight=0; renderCard();
+// Закрыть все панели кроме чата
+function closeAllPanels() {
+  gid('cards-panel').classList.remove('open');
+  gid('roadmap-panel').classList.remove('open');
+  document.querySelector('.main').style.display = 'flex';
+  gid('btn-cards').style.background = '';
+  gid('btn-roadmap').style.background = '';
 }
 
-function renderCard(){
-  if(fcCards.length===0) return;
-  const card=fcCards[fcIndex]; const isQ=!fcFlipped;
-  const label=isQ?`Вопрос ${fcIndex+1}/${fcCards.length}`:'Ответ';
-  gid('cards-body').innerHTML=`
+async function openCards() {
+  const chat = activeChat();
+  if (!chat) return;
+
+  // Закрываем роадмап, открываем карточки
+  gid('roadmap-panel').classList.remove('open');
+  gid('btn-roadmap').style.background = '';
+  gid('cards-panel').classList.add('open');
+  document.querySelector('.main').style.display = 'none';
+  gid('btn-cards').style.background = 'rgba(245,166,35,.35)';
+
+  gid('cards-title').textContent = chat.title;
+
+  // Если карточки для этого чата уже сгенерированы — показываем их
+  if (chat.cards && chat.cards.length > 0) {
+    fcIndex = chat.cardIndex || 0;
+    fcWrong = chat.cardWrong || 0;
+    fcRight = chat.cardRight || 0;
+    fcFlipped = false;
+    renderCard(chat);
+    return;
+  }
+
+  // Иначе — генерируем
+  gid('cards-body').innerHTML = '<div class="cards-generating"><div class="spinner"></div><span>ИИ генерирует карточки…</span></div>';
+
+  const context = getChatContext(chat);
+  const prompt = context
+    ? `На основе этого диалога создай ровно 8 карточек для повторения. Верни ТОЛЬКО JSON без пояснений: [{"q":"вопрос","a":"ответ"}, ...]\n\n${context}`
+    : `Создай 8 карточек по теме: "${chat.title}". Верни ТОЛЬКО JSON: [{"q":"вопрос","a":"ответ"}, ...]`;
+
+  try {
+    const raw = await callAI([{role:'user', content: prompt}], null, 1200);
+    chat.cards = parseJSON(raw);
+    if (!Array.isArray(chat.cards) || chat.cards.length === 0) throw new Error('Пустой массив');
+  } catch(e) {
+    showToast('Ошибка карточек: ' + e.message);
+    closeAllPanels();
+    return;
+  }
+
+  fcIndex = 0; fcFlipped = false; fcWrong = 0; fcRight = 0;
+  chat.cardIndex = 0; chat.cardWrong = 0; chat.cardRight = 0;
+  renderCard(chat);
+}
+
+function renderCard(chat) {
+  chat = chat || activeChat();
+  if (!chat || !chat.cards || chat.cards.length === 0) return;
+  const card = chat.cards[fcIndex];
+  const isQ = !fcFlipped;
+  const label = isQ ? `Вопрос ${fcIndex+1}/${chat.cards.length}` : 'Ответ';
+
+  gid('cards-body').innerHTML = `
     <div class="card-row">
       <div class="card-counter counter-wrong">${fcWrong}</div>
-      <div class="flashcard ${isQ?'question':'answer'}" id="fc" onclick="fcFlip()">
+      <div class="flashcard ${isQ?'question':'answer'}" onclick="fcFlip()">
         <div class="fc-label">${label}</div>
-        <div class="fc-text">${esc(isQ?card.q:card.a)}</div>
+        <div class="fc-text">${esc(isQ ? card.q : card.a)}</div>
         <div class="fc-crow">${CROW_SVG}</div>
       </div>
       <div class="card-counter counter-right">${fcRight}</div>
     </div>
-    <div class="fc-hint">${isQ?'Нажмите на карточку, чтобы увидеть ответ':'Вы знали этот ответ?'}</div>
+    <div class="fc-hint">${isQ ? 'Нажмите на карточку, чтобы увидеть ответ' : 'Вы знали этот ответ?'}</div>
     <div class="card-nav">
-      <button class="nav-btn nav-arrow" onclick="fcPrev()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
-      ${!isQ?`<button class="nav-btn nav-wrong" onclick="fcRate(false)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c07000" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-      <button class="nav-btn nav-right" onclick="fcRate(true)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2a7a2a" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg></button>`:''}
-      <button class="nav-btn nav-arrow" onclick="fcNext()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+      <button class="nav-btn nav-arrow" onclick="fcPrev()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      ${!isQ ? `
+      <button class="nav-btn nav-wrong" onclick="fcRate(false)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c07000" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <button class="nav-btn nav-right" onclick="fcRate(true)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2a7a2a" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+      </button>` : ''}
+      <button class="nav-btn nav-arrow" onclick="fcNext()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
     </div>
-    <div class="cards-progress">${fcIndex+1} / ${fcCards.length}</div>`;
+    <div style="display:flex;align-items:center;gap:16px;margin-top:8px;">
+      <div class="cards-progress">${fcIndex+1} / ${chat.cards.length}</div>
+      <button onclick="regenerateCards()" style="background:none;border:none;font-size:12px;color:rgba(26,26,26,.4);cursor:pointer;text-decoration:underline;">↻ Перегенерировать</button>
+    </div>`;
 }
 
-function fcFlip(){fcFlipped=!fcFlipped;renderCard();}
-function fcNext(){fcIndex=(fcIndex+1)%fcCards.length;fcFlipped=false;renderCard();}
-function fcPrev(){fcIndex=(fcIndex-1+fcCards.length)%fcCards.length;fcFlipped=false;renderCard();}
-function fcRate(knew){if(knew)fcRight++;else fcWrong++;fcNext();}
-function closeCards(){gid('cards-panel').classList.remove('open');document.querySelector('.main').style.display='flex';gid('btn-cards').style.background='';}
+function fcFlip() { fcFlipped = !fcFlipped; renderCard(); }
+function fcNext() {
+  const chat = activeChat(); if(!chat?.cards) return;
+  fcIndex = (fcIndex + 1) % chat.cards.length;
+  fcFlipped = false;
+  chat.cardIndex = fcIndex;
+  renderCard(chat);
+}
+function fcPrev() {
+  const chat = activeChat(); if(!chat?.cards) return;
+  fcIndex = (fcIndex - 1 + chat.cards.length) % chat.cards.length;
+  fcFlipped = false;
+  chat.cardIndex = fcIndex;
+  renderCard(chat);
+}
+function fcRate(knew) {
+  if (knew) fcRight++; else fcWrong++;
+  const chat = activeChat();
+  if (chat) { chat.cardWrong = fcWrong; chat.cardRight = fcRight; }
+  fcNext();
+}
+function closeCards() {
+  closeAllPanels();
+}
+async function regenerateCards() {
+  const chat = activeChat();
+  if (chat) { delete chat.cards; delete chat.cardIndex; delete chat.cardWrong; delete chat.cardRight; }
+  await openCards();
+}
 
-document.addEventListener('keydown',e=>{
-  if(!gid('cards-panel').classList.contains('open')) return;
-  if(e.key==='ArrowRight') fcNext();
-  if(e.key==='ArrowLeft') fcPrev();
-  if(e.key===' '){e.preventDefault();fcFlip();}
-  if(fcFlipped){if(e.key==='1')fcRate(false);if(e.key==='2')fcRate(true);}
+document.addEventListener('keydown', e => {
+  if (!gid('cards-panel').classList.contains('open')) return;
+  if (e.key === 'ArrowRight') fcNext();
+  if (e.key === 'ArrowLeft')  fcPrev();
+  if (e.key === ' ') { e.preventDefault(); fcFlip(); }
+  if (fcFlipped) {
+    if (e.key === '1') fcRate(false);
+    if (e.key === '2') fcRate(true);
+  }
 });
 
 // ── ROADMAP ──
-let rmSteps=[],rmExpanded=-1;
+let rmSteps=[], rmExpanded=-1;
 
-async function openRoadmap(){
-  const chat=activeChat(); const title=chat?chat.title:'Новый чат';
-  gid('rm-title').textContent=title;
+async function openRoadmap() {
+  const chat = activeChat();
+  if (!chat) return;
+
+  // Закрываем карточки, открываем роадмап
+  gid('cards-panel').classList.remove('open');
+  gid('btn-cards').style.background = '';
   gid('roadmap-panel').classList.add('open');
-  document.querySelector('.main').style.display='none';
-  if(gid('cards-panel').classList.contains('open')){gid('cards-panel').classList.remove('open');gid('btn-cards').style.background='';}
-  gid('btn-roadmap').style.background='rgba(245,166,35,.35)';
-  const body=gid('rm-body'); body.className='rm-generating';
-  body.innerHTML='<div class="spinner"></div><span>ИИ строит роадмап...</span>';
-  const context=getChatContext(chat);
-  const prompt=context
-    ?`На основе диалога создай роадмап из 5-6 шагов. Верни ТОЛЬКО JSON без пояснений: [{"title":"Название","status":"done","progress":100,"subtopics":["подтема"]},...]  Первый done, второй active, остальные todo.\n\n${context}`
-    :`Создай роадмап из 5-6 шагов для темы: "${title}". Верни ТОЛЬКО JSON: [{"title":"Название","status":"done","progress":100,"subtopics":["подтема"]},...]`;
+  document.querySelector('.main').style.display = 'none';
+  gid('btn-roadmap').style.background = 'rgba(245,166,35,.35)';
+
+  gid('rm-title').textContent = chat.title;
+
+  // Если роадмап для этого чата уже есть — показываем
+  if (chat.roadmap && chat.roadmap.length > 0) {
+    rmSteps = chat.roadmap;
+    rmExpanded = rmSteps.findIndex(s => s.status === 'active');
+    if (rmExpanded < 0) rmExpanded = 0;
+    renderRoadmap();
+    return;
+  }
+
+  const body = gid('rm-body');
+  body.className = 'rm-generating';
+  body.innerHTML = '<div class="spinner"></div><span>ИИ строит роадмап…</span>';
+
+  const context = getChatContext(chat);
+  const prompt = context
+    ? `На основе диалога создай роадмап из 5-6 шагов. Верни ТОЛЬКО JSON без пояснений: [{"title":"Название","status":"done","progress":100,"subtopics":["подтема"]},...]  Первый done, второй active, остальные todo.\n\n${context}`
+    : `Создай роадмап из 5-6 шагов для темы: "${chat.title}". Верни ТОЛЬКО JSON: [{"title":"Название","status":"done","progress":100,"subtopics":["подтема"]},...]`;
+
   try {
-    const raw=await callAI([{role:'user',content:prompt}],null,1400);
-    rmSteps=parseJSON(raw);
-    if(!Array.isArray(rmSteps)||rmSteps.length===0) throw new Error('Пустой массив');
-  } catch(e){ showToast('Ошибка роадмапа: '+e.message); closeRoadmap(); return; }
-  rmExpanded=rmSteps.findIndex(s=>s.status==='active');
-  if(rmExpanded<0) rmExpanded=0;
+    const raw = await callAI([{role:'user', content: prompt}], null, 1400);
+    rmSteps = parseJSON(raw);
+    if (!Array.isArray(rmSteps) || rmSteps.length === 0) throw new Error('Пустой массив');
+    chat.roadmap = rmSteps; // сохраняем в чат
+  } catch(e) {
+    showToast('Ошибка роадмапа: ' + e.message);
+    closeAllPanels();
+    return;
+  }
+
+  rmExpanded = rmSteps.findIndex(s => s.status === 'active');
+  if (rmExpanded < 0) rmExpanded = 0;
   renderRoadmap();
 }
 
-function renderRoadmap(){
-  const body=gid('rm-body'); body.className='rm-list';
-  body.innerHTML=rmSteps.map((step,i)=>{
-    const isExp=i===rmExpanded;
-    const dotCls=step.status==='done'?'rm-dot done':'rm-dot';
-    const dotInner=step.status==='done'?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>`:String(i+1).padStart(2,'0');
-    const statusEl=step.status==='done'?`<div class="rm-status-done">✓ Завершено</div>`:step.status==='active'?`<div class="rm-status-active">● В процессе</div>`:`<div class="rm-status-todo">Не начато</div>`;
-    const expandedHtml=isExp?`<div class="rm-expanded">${(step.subtopics||[]).map((s,j)=>`<div class="rm-sub"><strong>${j+1}.</strong> ${esc(s)}</div>`).join('')}${step.status==='active'?`<div class="rm-progress-wrap"><div class="rm-bar"><div class="rm-bar-fill" style="width:${step.progress||0}%"></div></div><span class="rm-pct">${step.progress||0}%</span></div>`:''}</div>`:'';
-    return `<div class="rm-step" onclick="rmToggle(${i})"><div class="${dotCls}">${dotInner}</div><div class="rm-content"><div class="rm-num">${String(i+1).padStart(2,'0')}</div><div class="rm-title">${esc(step.title)}</div>${statusEl}${expandedHtml}</div></div>`;
+function renderRoadmap() {
+  const body = gid('rm-body');
+  body.className = 'rm-list';
+  body.innerHTML = rmSteps.map((step, i) => {
+    const isExp = i === rmExpanded;
+    const dotCls = step.status==='done' ? 'rm-dot done' : 'rm-dot';
+    const dotInner = step.status==='done'
+      ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>`
+      : String(i+1).padStart(2,'0');
+    const statusEl = step.status==='done'
+      ? `<div class="rm-status-done">✓ Завершено</div>`
+      : step.status==='active'
+      ? `<div class="rm-status-active">● В процессе</div>`
+      : `<div class="rm-status-todo">Не начато</div>`;
+    const expandedHtml = isExp ? `
+      <div class="rm-expanded">
+        ${(step.subtopics||[]).map((s,j)=>`<div class="rm-sub"><strong>${j+1}.</strong> ${esc(s)}</div>`).join('')}
+        ${step.status==='active'?`<div class="rm-progress-wrap"><div class="rm-bar"><div class="rm-bar-fill" style="width:${step.progress||0}%"></div></div><span class="rm-pct">${step.progress||0}%</span></div>`:''}
+      </div>` : '';
+    return `<div class="rm-step" onclick="rmToggle(${i})">
+      <div class="${dotCls}">${dotInner}</div>
+      <div class="rm-content">
+        <div class="rm-num">${String(i+1).padStart(2,'0')}</div>
+        <div class="rm-title">${esc(step.title)}</div>
+        ${statusEl}${expandedHtml}
+      </div>
+    </div>`;
   }).join('');
 }
 
-function rmToggle(i){rmExpanded=rmExpanded===i?-1:i;renderRoadmap();}
-function closeRoadmap(){gid('roadmap-panel').classList.remove('open');document.querySelector('.main').style.display='flex';gid('btn-roadmap').style.background='';}
+function rmToggle(i) { rmExpanded = rmExpanded===i ? -1 : i; renderRoadmap(); }
+function closeRoadmap() { closeAllPanels(); }
 
 // ── INIT CHAT ──
 initNewChat();
