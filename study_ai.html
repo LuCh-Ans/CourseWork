@@ -1152,7 +1152,7 @@ async function uploadFileToBacked(file) {
     const data = await res.json();
     const summary = data?.summary?.text || '';
     const filename = data?.document?.original_filename || file.name;
-    if (chat) { chat.roadmap = null; chat.cards = null; }
+    if (chat) { chat.roadmap = null; chat.cards = null; chat.fileContext = summary; chat.fileName = filename;  chat.history = []; }
     attachedFileText = summary;
     attachedFileName = filename;
     gid('file-badge-name').textContent = filename;
