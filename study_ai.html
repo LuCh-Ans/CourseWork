@@ -972,6 +972,8 @@ async function openFileInChat() {
   await uploadFileToBacked(file);
 }
 
+
+
 // SCREEN 3 — CHAT APP logic
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -1098,9 +1100,10 @@ async function sendMessage(){
   let systemPrompt = SYSTEM_PROMPT;
   if(attachedFileText) systemPrompt += `\n\n---\nПОЛЬЗОВАТЕЛЬ ЗАГРУЗИЛ ФАЙЛ «${attachedFileName}».\nСОДЕРЖИМОЕ:\n${attachedFileText}\n---`;
   try {
+    chat.history.push({role:'user',content:text});
     let historyToSend=[...chat.history];
     if(attachedFileText && chat.history.length===1) historyToSend=[{role:'user',content:`${text}\n\n[Контент файла]\n${attachedFileText}`}];
-    chat.history.push({role:'user',content:text});
+
     const reply=await callAI(historyToSend, systemPrompt, 1200);
     thinkEl.remove(); chat.history.push({role:'assistant',content:reply});
     if(attachedFileText){ chat.fileContext=attachedFileText; chat.fileName=attachedFileName; }
@@ -1149,6 +1152,7 @@ async function uploadFileToBacked(file) {
     const data = await res.json();
     const summary = data?.summary?.text || '';
     const filename = data?.document?.original_filename || file.name;
+    if (chat) { chat.roadmap = null; chat.cards = null; }
     attachedFileText = summary;
     attachedFileName = filename;
     gid('file-badge-name').textContent = filename;
@@ -1159,7 +1163,7 @@ async function uploadFileToBacked(file) {
       gid('chat-title').textContent = chat.title;
       renderHistory();
     }
-    appendMsg('assistant', `✅ Файл **${filename}** загружен и проанализирован. Задавай вопросы по его содержанию!`, chat);
+    appendMsg('assistant', `Файл **${filename}** загружен и проанализирован. Задавай вопросы по его содержанию!`, chat);
   } catch(e) {
     thinkEl.remove();
     showToast('Ошибка соединения с сервером');
