@@ -151,13 +151,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
 
 .home-btns { display: flex; gap: 8px; align-items: center; }
 .btn-projects {
+  display: none;
   background: #111; color: #f5ece4; border: none; border-radius: 50px;
   padding: 10px 22px; font-size: 15px; cursor: pointer; font-family: 'Manrope', sans-serif;
   transition: background 0.2s;
 }
 .btn-projects:hover { background: #333; }
 .btn-chat-btn {
-  background: #FF8D28; color: #fff; border: none; border-radius: 50px;
+  background: #111; color: #fff; border: none; border-radius: 50px;
   padding: 10px 22px; font-size: 15px; cursor: pointer; font-family: 'Manrope', sans-serif;
   transition: background 0.2s;
 }
@@ -282,9 +283,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
 .btn-light { background: rgba(255,255,255,.55); backdrop-filter: blur(10px); color: #1a1a1a; border: 1px solid rgba(255,255,255,.7); border-radius: 22px; padding: 11px 18px; font-size: 14px; font-weight: 500; font-family: 'Manrope', sans-serif; cursor: pointer; text-align: left; transition: background .2s, transform .1s; width: 100%; }
 .btn-light:hover { background: rgba(255,255,255,.75); }
 .btn-light:active { transform: scale(.97); }
-.btn-home-sm { background: rgba(255,141,40,.18); border: 1px solid rgba(255,141,40,.35); color: #c05a00; border-radius: 22px; padding: 11px 18px; font-size: 14px; font-weight: 500; font-family: 'Manrope', sans-serif; cursor: pointer; text-align: left; transition: background .2s; width: 100%; }
-.btn-home-sm:hover { background: rgba(255,141,40,.3); }
+.btn-home-sm { background: #111; color: #fff; border: none; border-radius: 50px; padding: 10px 22px; font-size: 15px; font-weight: 500;  
+  font-family: 'Manrope', sans-serif; cursor: pointer; text-align: left; transition: background 0.2s; width: 100%; 
+}
 
+.btn-home-sm:hover {
+  background: #e07a20;
+}
 .history-panel { display: none; flex-direction: column; gap: 4px; max-height: 280px; overflow-y: auto; margin-top: 2px; }
 .history-panel::-webkit-scrollbar { width: 3px; }
 .history-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 2px; }
@@ -536,9 +541,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     SCREEN 2 — UPLOAD HOME
-═══════════════════════════════════════ -->
+<!-- SCREEN 2 — UPLOAD HOME -->
 <div class="screen" id="screen-home">
   <div class="home-header">
     <div class="home-logo">
@@ -572,7 +575,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
       </div>
       <div class="home-btns">
         <button class="btn-chat-btn" onclick="goToChat()">Открыть чат</button>
-        <button class="btn-projects" onclick="goToChat()">созданные проекты</button>
         <button class="btn-logout" onclick="handleLogout()">Выйти</button>
       </div>
     </div>
@@ -656,7 +658,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
     <button class="btn-home-sm" onclick="showScreen('home')">← На главную</button>
 
     <button class="btn-dark" id="hist-btn" onclick="toggleHistory()">
-      История
+      Показать чаты
       <svg class="chevron" id="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
     </button>
     <div class="history-panel" id="hist-panel"></div>
