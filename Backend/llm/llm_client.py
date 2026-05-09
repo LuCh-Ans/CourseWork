@@ -1,11 +1,13 @@
 import httpx
 from config import settings
 
-# Константы промптов
 _SYSTEM_PROMPT = (
     "You are a professional academic assistant for the Study Lab platform. "
     "Your goal is to help students analyze educational materials accurately and structurally. "
-    "Always use Markdown for formatting (bullet points, bold text, headers) to make the output easy to read."
+    "Always use Markdown for formatting (bullet points, bold text, headers) to make the output easy to read. "
+    "IMPORTANT: Always wrap ALL mathematical formulas and expressions in LaTeX delimiters. "
+    "Use \\( ... \\) for inline formulas and \\[ ... \\] for block formulas. "
+    "Never write formulas as plain text. Example: write \\( x^2 + y^2 = r^2 \\) not x²+y²=r²."
 )
 
 _USER_PROMPT_TEMPLATE = (
@@ -35,126 +37,63 @@ _RAG_PROMPT_TEMPLATE = (
     "USER QUESTION:\n{query}"
 )
 
-_ENDPOINTS: dict[str, str] = {
-    "huggingface": "https://router.huggingface.co/v1/chat/completions",
-    "openai": "https://api.openai.com/v1/chat/completions",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/models/{settings.CURRENT_MODEL}:generateContent?key={settings.GEMINI_API_KEY}",
-     "yagpt": "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
-}
+
 async def call_llm(context: str, query: str) -> str:
-    """
-    Универсальная функция для общения с LLM. 
-    Используется для RAG (вопрос-ответ) и суммаризации.
-    """
     if not context or len(context.strip()) < 5:
         return "Контекст для ответа не найден в базе данных."
     final_prompt = _RAG_PROMPT_TEMPLATE.format(text=context, query=query)
-    return await _openai_compat_summarize(text="", prompt_template=final_prompt)
+    return await _request(final_prompt)
+
+
 async def summarize(text: str) -> str:
-    """
-    Твоя текущая функция суммаризации. 
-    Она вызывает call_llm (через приватные методы) для обработки чанков.
-    """
-    max_chunk_size = 15000 
-    chunks = [text[i:i+max_chunk_size] for i in range(0, len(text), max_chunk_size)]
+    max_chunk_size = 15000
+    chunks = [text[i:i + max_chunk_size] for i in range(0, len(text), max_chunk_size)]
 
     if len(chunks) == 1:
-        return await _openai_compat_summarize(chunks[0], _USER_PROMPT_TEMPLATE)
+        return await _request(_USER_PROMPT_TEMPLATE.format(text=chunks[0]))
 
     partial_summaries = []
     for i, chunk in enumerate(chunks, start=1):
-        partial = await call_llm(chunk, _USER_PROMPT_TEMPLATE)
+        prompt = _USER_PROMPT_TEMPLATE.format(text=chunk) + f"\n\n(Part {i} of {len(chunks)})"
+        partial = await _request(prompt)
         partial_summaries.append(f"Part {i}:\n{partial}")
 
     combined = "\n\n".join(partial_summaries)
-    return await call_llm(combined, _COMBINE_PROMPT_TEMPLATE)
+    return await _request(_COMBINE_PROMPT_TEMPLATE.format(text=combined))
 
-async def _summarize_chunk(text: str, prompt_template: str) -> str:
-    """Выбор метода суммаризации в зависимости от провайдера"""
-    if settings.CURRENT_PROVIDER == "yagpt":
-        return await _yagpt_summarize(text, prompt_template)
-    return await _openai_compat_summarize(text, prompt_template)
 
+async def _request(full_content: str) -> str:
+    """Единая функция для всех запросов"""
+    url = "https://openrouter.ai/api/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:8000",
+        "X-Title": "StudyLab"
+    }
+
+    payload = {
+        "model": settings.CURRENT_MODEL,
+        "messages": [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": full_content}
+        ],
+        "max_tokens": settings.LLM_MAX_TOKENS,
+        "temperature": settings.LLM_TEMPERATURE
+    }
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+
+        if response.status_code != 200:
+            print(f"ERROR: {response.status_code} - {response.text}")
+            raise RuntimeError(f"OpenRouter error: {response.text}")
+
+        data = response.json()
+        return data['choices'][0]['message']['content']
 
 async def _openai_compat_summarize(text: str, prompt_template: str) -> str:
-    """
-    Универсальная функция: поддерживает Gemini и Hugging Face (Qwen).
-    """
+    """Совместимость со старым кодом"""
     full_content = f"{prompt_template}\n\n{text}".strip()
-
-    async with httpx.AsyncClient() as client:
-        try:
-            if settings.CURRENT_PROVIDER == "gemini":
-                url = (
-                    f"https://generativelanguage.googleapis.com/v1beta/models/"
-                    f"{settings.CURRENT_MODEL}:generateContent?key={settings.GEMINI_API_KEY}"
-                )
-                payload = {
-                    "contents": [{"parts": [{"text": full_content}]}],
-                    "generationConfig": {
-                        "maxOutputTokens": settings.LLM_MAX_TOKENS,
-                        "temperature": settings.LLM_TEMPERATURE
-                    }
-                }
-                headers = {"Content-Type": "application/json"}
-            
-            else:
-                url = settings.BASE_URL 
-                headers = {
-                    "Authorization": f"Bearer {settings.HF_API_KEY}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": settings.CURRENT_MODEL,
-                    "messages": [{"role": "user", "content": full_content}],
-                    "max_tokens": settings.LLM_MAX_TOKENS,
-                    "temperature": settings.LLM_TEMPERATURE
-                }
-
-            response = await client.post(url, json=payload, headers=headers, timeout=60.0)
-            
-            if response.status_code != 200:
-                print(f"--- {settings.CURRENT_PROVIDER} Error Body: {response.text} ---")
-                raise RuntimeError(f"[{settings.CURRENT_PROVIDER}] Error {response.status_code}")
-
-            data = response.json()
-            if settings.CURRENT_PROVIDER == "gemini":
-                return data['candidates'][0]['content']['parts'][0]['text']
-            else:
-                return data['choices'][0]['message']['content']
-
-        except Exception as e:
-            raise RuntimeError(f"LLM request failed: {str(e)}")
-async def _yagpt_summarize(text: str, prompt_template: str) -> str:
-    """Специфичный метод для YandexGPT"""
-    if not settings.YAGPT_FOLDER_ID:
-        raise RuntimeError("YAGPT_FOLDER_ID is not set in .env")
-        
-    headers = {
-        "Authorization": f"Api-Key {settings.LLM_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "modelUri": f"gpt://{settings.YAGPT_FOLDER_ID}/yandexgpt",
-        "completionOptions": {
-            "stream": False,
-            "temperature": settings.LLM_TEMPERATURE,
-            "maxTokens": str(settings.LLM_MAX_TOKENS),
-        },
-        "messages": [
-            {"role": "system", "text": _SYSTEM_PROMPT},
-            {"role": "user", "text": prompt_template.format(text=text)},
-        ],
-    }
-
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(_ENDPOINTS["yagpt"], headers=headers, json=payload)
-
-    if response.status_code != 200:
-        raise RuntimeError(f"[YAGPT] API error {response.status_code}: {response.text}")
-
-    data = response.json()
-    try:
-        return data["result"]["alternatives"][0]["message"]["text"].strip()
-    except (KeyError, IndexError) as exc:
-        raise RuntimeError(f"Unexpected YaGPT response format: {data}") from exc
+    return await _request(full_content)

@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from auth.deps import get_current_user
 from database.session import get_db
@@ -25,6 +25,20 @@ class AddMessageRequest(BaseModel):
 class RenameSessionRequest(BaseModel):
     title: str
 
+class FlashcardsSaveRequest(BaseModel):
+    cards: List[Dict[str, Any]]
+    cardIndex: Optional[int] = 0
+    cardWrong: Optional[int] = 0
+    cardRight: Optional[int] = 0
+
+
+class RoadmapSaveRequest(BaseModel):
+    roadmap: List[Dict[str, Any]]
+
+
+
+
+
 
 @router.get("", response_model=list[SessionListItem])
 async def list_sessions(
@@ -40,7 +54,11 @@ async def create_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await ChatService(db).create_session(current_user.id, body.title, body.document_id)
+    session = await ChatService(db).create_session(
+        current_user.id, body.title, body.document_id
+    )
+    # Важно: не загружаем messages при создании
+    return await ChatService(db).get_session(session.id, current_user.id)
 
 
 @router.get("/{session_id}", response_model=SessionSchema)
@@ -78,6 +96,41 @@ async def delete_chat_session(
     ok = await ChatService(db).delete_session(session_id, current_user.id)
     if not ok:
         raise HTTPException(status_code=404, detail="Session not found")
+@router.post("/{session_id}/cards")
+async def save_flashcards(
+    session_id: uuid.UUID,
+    body: FlashcardsSaveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    session = await ChatService(db).save_cards(
+        session_id=session_id,
+        user_id=current_user.id,
+        cards=body.cards,
+        card_index=body.cardIndex,
+        card_wrong=body.cardWrong,
+        card_right=body.cardRight
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "ok"}
+
+
+@router.post("/{session_id}/roadmap")
+async def save_roadmap(
+    session_id: uuid.UUID,
+    body: RoadmapSaveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    session = await ChatService(db).save_roadmap(
+        session_id=session_id,
+        user_id=current_user.id,
+        roadmap=body.roadmap
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "ok"}
 
 
 @router.patch("/{session_id}", response_model=SessionSchema)
@@ -91,3 +144,4 @@ async def rename_chat_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+

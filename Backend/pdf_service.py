@@ -106,7 +106,7 @@ def extract_text_docx(file_path: Path) -> list[dict]:
         text = paragraph.text.strip()
         if not text:
             continue
-        if paragraph.style.name.startswith('Heading'):
+        if paragraph.style and paragraph.style.name and paragraph.style.name.startswith('Heading'):
             curr_section = text
             content_blocks.append({
                 "content": text,

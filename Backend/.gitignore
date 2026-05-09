@@ -25,4 +25,4 @@ files/uploads/
 # Системные файлы Mac
 .DS_Store
 
-.env
+../.env

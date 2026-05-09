@@ -22,7 +22,7 @@ from auth.chat_router import router as chat_router
 UPLOAD_DIR = Path("files/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx"}
-MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_MB = 50
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 app = FastAPI(
@@ -94,21 +94,19 @@ async def test() -> JSONResponse:
 async def chat_endpoint(request: ChatRequest):
     """Прокси к LLM для чат-интерфейса"""
     try:
-        from llm.llm_client import _openai_compat_summarize
+        from llm.llm_client import _request
         history_lines = []
         for m in request.messages:
             prefix = "Пользователь" if m.role == "user" else "Ассистент"
             history_lines.append(f"{prefix}: {m.content}")
-
         history_text = "\n".join(history_lines)
-        system_part = f"{request.system}\n\n" if request.system else ""
-        full_text = f"{system_part}{history_text}"
-
-        last_user = next(
-            (m.content for m in reversed(request.messages) if m.role == "user"), ""
+        system_prompt = request.system if request.system else (
+            "Ты Study AI — умный учебный ассистент. Отвечай на русском языке. "
+            "Объясняй концепции чётко, с аналогиями и примерами. "
+            "Используй маркированные списки и **жирный** для ключевых терминов."
         )
-
-        answer = await _openai_compat_summarize(full_text, last_user)
+        full_prompt = f"{system_prompt}\n\n{history_text}"
+        answer = await _request(full_prompt)
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
