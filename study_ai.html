@@ -387,13 +387,31 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
 .rm-top-left .lbl { font-size: 18px; color: rgba(26,26,26,.45); margin-bottom: 4px; font-weight: 500; }
 .rm-top-left .title { font-size: 34px; font-weight: 700; color: #1a1a1a; letter-spacing: -.5px; }
 .rm-generating { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: rgba(26,26,26,.5); font-size: 14px; flex: 1; }
-.rm-list { position: relative; padding-left: 32px; }
-.rm-list::before { content:''; position: absolute; left: 19px; top: 20px; width: 2px; bottom: 20px; background: #1a1a1a; border-radius: 1px; }
-.rm-step { display: flex; align-items: flex-start; gap: 20px; margin-bottom: 28px; position: relative; cursor: pointer; }
+.rm-list { position: relative; padding-left: 20px; }
+.rm-list::before {
+  content: '';
+  position: absolute;
+  left: 7px; top: 20px;
+  width: 2px; bottom: 20px;
+  background: rgba(26,26,26,.15);
+  border-radius: 1px;
+}
+.rm-step {
+  display: flex; align-items: flex-start;
+  gap: 20px; margin-bottom: 28px;
+  position: relative; cursor: pointer;
+}
 .rm-step:last-child { margin-bottom: 0; }
-.rm-dot { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #F5A623 0%, #E8882D 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 13px; flex-shrink: 0; position: relative; z-index: 2; box-shadow: 0 2px 8px rgba(232,136,45,.35); transition: transform .15s, box-shadow .15s; }
-.rm-step:hover .rm-dot { transform: scale(1.08); box-shadow: 0 4px 14px rgba(232,136,45,.45); }
-.rm-dot.done { background: linear-gradient(135deg, #4caf7d 0%, #27ae60 100%); box-shadow: 0 2px 8px rgba(39,174,96,.3); }
+.rm-dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  flex-shrink: 0;
+  position: relative; z-index: 2;
+  margin-top: 3px;
+  transition: transform .15s;
+}
+.rm-step:hover .rm-dot { transform: scale(1.25); }.rm-dot.done { background: linear-gradient(135deg, #4caf7d 0%, #27ae60 100%); box-shadow: 0 2px 8px rgba(39,174,96,.3); }
 .rm-content { flex: 1; padding-top: 6px; }
 .rm-num { font-size: 12px; color: rgba(26,26,26,.4); font-weight: 500; margin-bottom: 2px; }
 .rm-title { font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
@@ -1341,19 +1359,17 @@ async function openRoadmap() {
   const chat = activeChat();
   if (!chat) return;
 
-  // Закрываем карточки, открываем роадмап
   gid('cards-panel').classList.remove('open');
   gid('btn-cards').style.background = '';
   gid('roadmap-panel').classList.add('open');
   document.querySelector('.main').style.display = 'none';
   gid('btn-roadmap').style.background = 'rgba(245,166,35,.35)';
-
   gid('rm-title').textContent = chat.title;
 
-  // Если роадмап для этого чата уже есть — показываем
+  // Если роадмап уже сохранён — показываем без перегенерации
   if (chat.roadmap && chat.roadmap.length > 0) {
     rmSteps = chat.roadmap;
-    rmExpanded = rmSteps.findIndex(s => s.status === 'active');
+    rmExpanded = chat.rmExpanded ?? rmSteps.findIndex(s => s.status === 'active');
     if (rmExpanded < 0) rmExpanded = 0;
     renderRoadmap();
     return;
@@ -1365,22 +1381,22 @@ async function openRoadmap() {
 
   const context = getChatContext(chat);
   const prompt = context
-    ? `На основе диалога создай роадмап из 5-6 шагов. Верни ТОЛЬКО JSON без пояснений: [{"title":"Название","status":"done","progress":100,"subtopics":["подтема"]},...]  Первый done, второй active, остальные todo.\n\n${context}`
-    : `Создай роадмап из 5-6 шагов для темы: "${chat.title}". Верни ТОЛЬКО JSON: [{"title":"Название","status":"done","progress":100,"subtopics":["подтема"]},...]`;
+    ? `На основе диалога создай роадмап из 5-6 шагов. Верни ТОЛЬКО JSON без пояснений: [{"title":"Название","subtopics":["подтема 1","подтема 2"]},...]  \n\n${context}`
+    : `Создай роадмап из 5-6 шагов для темы: "${chat.title}". Верни ТОЛЬКО JSON: [{"title":"Название","subtopics":["подтема 1","подтема 2"]},...]`;
 
   try {
     const raw = await callAI([{role:'user', content: prompt}], null, 1400);
     rmSteps = parseJSON(raw);
     if (!Array.isArray(rmSteps) || rmSteps.length === 0) throw new Error('Пустой массив');
     chat.roadmap = rmSteps; // сохраняем в чат
+    chat.rmExpanded = 0;
   } catch(e) {
     showToast('Ошибка роадмапа: ' + e.message);
     closeAllPanels();
     return;
   }
 
-  rmExpanded = rmSteps.findIndex(s => s.status === 'active');
-  if (rmExpanded < 0) rmExpanded = 0;
+  rmExpanded = 0;
   renderRoadmap();
 }
 
@@ -1389,32 +1405,29 @@ function renderRoadmap() {
   body.className = 'rm-list';
   body.innerHTML = rmSteps.map((step, i) => {
     const isExp = i === rmExpanded;
-    const dotCls = step.status==='done' ? 'rm-dot done' : 'rm-dot';
-    const dotInner = step.status==='done'
-      ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>`
-      : String(i+1).padStart(2,'0');
-    const statusEl = step.status==='done'
-      ? `<div class="rm-status-done">✓ Завершено</div>`
-      : step.status==='active'
-      ? `<div class="rm-status-active">● В процессе</div>`
-      : `<div class="rm-status-todo">Не начато</div>`;
-    const expandedHtml = isExp ? `
+    const expandedHtml = isExp && step.subtopics?.length ? `
       <div class="rm-expanded">
-        ${(step.subtopics||[]).map((s,j)=>`<div class="rm-sub"><strong>${j+1}.</strong> ${esc(s)}</div>`).join('')}
-        ${step.status==='active'?`<div class="rm-progress-wrap"><div class="rm-bar"><div class="rm-bar-fill" style="width:${step.progress||0}%"></div></div><span class="rm-pct">${step.progress||0}%</span></div>`:''}
+        ${step.subtopics.map(s => `<div class="rm-sub">— ${esc(s)}</div>`).join('')}
       </div>` : '';
+
     return `<div class="rm-step" onclick="rmToggle(${i})">
-      <div class="${dotCls}">${dotInner}</div>
+      <div class="rm-dot"></div>
       <div class="rm-content">
         <div class="rm-num">${String(i+1).padStart(2,'0')}</div>
         <div class="rm-title">${esc(step.title)}</div>
-        ${statusEl}${expandedHtml}
+        ${expandedHtml}
       </div>
     </div>`;
   }).join('');
 }
 
-function rmToggle(i) { rmExpanded = rmExpanded===i ? -1 : i; renderRoadmap(); }
+function rmToggle(i) {
+  rmExpanded = rmExpanded === i ? -1 : i;
+  const chat = activeChat();
+  if (chat) chat.rmExpanded = rmExpanded; // сохраняем открытый шаг
+  renderRoadmap();
+}
+
 function closeRoadmap() { closeAllPanels(); }
 
 // ── INIT CHAT ──
