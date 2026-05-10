@@ -283,8 +283,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
 .btn-light { background: rgba(255,255,255,.55); backdrop-filter: blur(10px); color: #1a1a1a; border: 1px solid rgba(255,255,255,.7); border-radius: 22px; padding: 11px 18px; font-size: 14px; font-weight: 500; font-family: 'Manrope', sans-serif; cursor: pointer; text-align: left; transition: background .2s, transform .1s; width: 100%; }
 .btn-light:hover { background: rgba(255,255,255,.75); }
 .btn-light:active { transform: scale(.97); }
-.btn-home-sm { background: #111; color: #fff; border: none; border-radius: 50px; padding: 10px 22px; font-size: 15px; font-weight: 500;  
-  font-family: 'Manrope', sans-serif; cursor: pointer; text-align: left; transition: background 0.2s; width: 100%; 
+.btn-home-sm { background: #111; color: #fff; border: none; border-radius: 50px; padding: 10px 22px; font-size: 15px; font-weight: 500;
+  font-family: 'Manrope', sans-serif; cursor: pointer; text-align: left; transition: background 0.2s; width: 100%;
 }
 
 .btn-home-sm:hover {
@@ -1016,15 +1016,26 @@ function showToast(msg, duration=3000) {
 }
 
 async function callAI(messages, system, maxTokens=1000) {
-  const res = await fetch(API_BACKEND + '/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ messages, system: system || '' })
-  });
-  if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.detail || `HTTP ${res.status}`); }
-  const data = await res.json();
-  return data.answer || '';
+  try {
+    const res = await fetch(API_BACKEND + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        messages: messages,
+        system: system || SYSTEM_PROMPT
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.answer || '';
+  } catch (e) {
+    console.error(e);
+    return "Ошибка соединения с AI. Попробуй ещё раз.";
+  }
 }
 
 function parseJSON(raw) {
@@ -1072,32 +1083,68 @@ function deleteChat(id){
   if(activeChatId===id){ chats.length>0 ? switchChat(chats[chats.length-1].id) : initNewChat(); } else { renderHistory(); }
 }
 
-function switchChat(id){
-  activeChatId=id; const chat=activeChat();
-  closeAllPanels(); // закрываем карточки/роадмап при смене чата
+async function switchChat(id){
+  activeChatId=id;
+  const chat=activeChat();
+  closeAllPanels();
   gid('chat-title').textContent=chat.title;
-  const msgs=gid('messages'); msgs.innerHTML='';
-  if(chat.messages.length===0){
-    msgs.innerHTML='<div class="msg msg-ai" style="color:rgba(26,26,26,.48);font-size:13px">Привет! Я Study AI — твой умный помощник в учёбе.</div>';
+
+  const msgs=gid('messages');
+  msgs.innerHTML='';
+
+  if(chat.messages && chat.messages.length > 0){
+    chat.messages.forEach(m => {
+      const d=document.createElement('div');
+      d.className='msg '+(m.role==='user'?'msg-user':'msg-ai');
+      d.innerHTML=renderText(m.content);
+      msgs.appendChild(d);
+    });
   } else {
-    chat.messages.forEach(m=>{ const d=document.createElement('div'); d.className='msg '+(m.role==='user'?'msg-user':'msg-ai'); d.innerHTML=renderText(m.content); msgs.appendChild(d); });
+    msgs.innerHTML='<div class="msg msg-ai" style="color:rgba(26,26,26,.48);font-size:13px">Привет! Я Study AI — твой умный помощник в учёбе.</div>';
   }
-  // показать значок "карточки сохранены" если они есть
+
+  scrollBottom();
+  renderHistory();
+
   if (chat.cards && chat.cards.length > 0) {
     gid('btn-cards').textContent = `Карточки (${chat.cards.length})`;
   } else {
     gid('btn-cards').textContent = 'Карточки';
   }
-  scrollBottom(); renderHistory();
-  gid('hist-panel').classList.remove('open'); gid('chevron').classList.remove('open');
 }
 
-function initNewChat(){
-  const id=uid();
-  chats.push({id, title:'Новый чат', messages:[], history:[]});
-  activeChatId=id;
-  gid('chat-title').textContent='Новый чат';
-  gid('messages').innerHTML='<div class="msg msg-ai" style="color:rgba(26,26,26,.48);font-size:18px">Привет! Я Study AI — твой умный помощник в учёбе. Задай любой вопрос по теме, и я объясню понятно и с примерами.</div>';
+async function initNewChat(){
+  // Если уже есть чат с названием "Новый чат" — не создаём новый
+  const existingNew = chats.find(c => c.title === "Новый чат");
+  if (existingNew) {
+    await switchChat(existingNew.id);
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BACKEND}/chat-sessions`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title: "Новый чат"})
+    });
+    const data = res.ok ? await res.json() : {id: uid()};
+
+    const newChat = {
+      id: data.id,
+      title: "Новый чат",
+      messages: [],
+      history: [],
+      cards: [],
+      roadmap: [],
+      loaded: true
+    };
+    chats.push(newChat);
+    activeChatId = newChat.id;
+    gid('chat-title').textContent = newChat.title;
+  } catch(e) {
+    console.error(e);
+  }
   renderHistory();
 }
 
@@ -1108,25 +1155,58 @@ function newChat(){
 }
 
 async function sendMessage(){
-  const input=gid('chat-input'); const text=input.value.trim();
+  const input=gid('chat-input');
+  const text=input.value.trim();
   if(!text||isLoading) return;
   if(!activeChatId) initNewChat();
-  const chat=activeChat(); input.value=''; isLoading=true; gid('send-btn').disabled=true;
-  if(chat.history.length===0){ chat.title=text.length>32?text.slice(0,30)+'...':text; gid('chat-title').textContent=chat.title; renderHistory(); }
-  appendMsg('user',text,chat);
-  const thinkEl=showThinking();
-  let systemPrompt = SYSTEM_PROMPT;
-  if(attachedFileText) systemPrompt += `\n\n---\nПОЛЬЗОВАТЕЛЬ ЗАГРУЗИЛ ФАЙЛ «${attachedFileName}».\nСОДЕРЖИМОЕ:\n${attachedFileText}\n---`;
-  try {
-    chat.history.push({role:'user',content:text});
-    let historyToSend=[...chat.history];
-    if(attachedFileText && chat.history.length===1) historyToSend=[{role:'user',content:`${text}\n\n[Контент файла]\n${attachedFileText}`}];
 
-    const reply=await callAI(historyToSend, systemPrompt, 1200);
-    thinkEl.remove(); chat.history.push({role:'assistant',content:reply});
+  const chat=activeChat();
+  input.value='';
+  isLoading=true;
+  gid('send-btn').disabled=true;
+
+  if(chat.history.length===0){
+    chat.title=text.length>35?text.slice(0,32)+'...':text;
+    gid('chat-title').textContent=chat.title;
+    renderHistory();
+  }
+
+  appendMsg('user',text,chat);
+  chat.history.push({role:'user',content:text});
+
+  // Сохраняем сообщение пользователя
+  fetch(API_BACKEND+'/chat-sessions/'+chat.id+'/messages', {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({role:'user', content:text})
+  }).catch(()=>{});
+
+  const thinkEl=showThinking();
+
+  try {
+    let systemPrompt = SYSTEM_PROMPT;
+    if(attachedFileText) systemPrompt += `\n\n---\nФАЙЛ: ${attachedFileName}\n${attachedFileText}\n---`;
+
+    const reply=await callAI(chat.history, systemPrompt);
+    thinkEl.remove();
     appendMsg('assistant',reply,chat);
-  } catch(e){ thinkEl.remove(); appendMsg('assistant','Ошибка: '+e.message,chat); }
-  isLoading=false; gid('send-btn').disabled=false; gid('chat-input').focus();
+    chat.history.push({role:'assistant',content:reply});
+
+    // Сохраняем ответ ИИ
+    fetch(API_BACKEND+'/chat-sessions/'+chat.id+'/messages', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({role:'assistant', content:reply})
+    }).catch(()=>{});
+
+  } catch(e){
+    thinkEl.remove();
+    appendMsg('assistant','Ошибка: '+e.message,chat);
+  }
+
+  isLoading=false;
+  gid('send-btn').disabled=false;
+  gid('chat-input').focus();
 }
 
 function appendMsg(role,text,chat){
@@ -1193,7 +1273,58 @@ function readFileAsText(file) {
 }
 
 function removeFile(){ attachedFileText=null; attachedFileName=null; gid('file-badge').classList.remove('show'); }
+// Загрузка всех чатов с сервера
+async function loadSessions() {
+  try {
+    const res = await fetch(API_BACKEND + '/chat-sessions', {
+      credentials: 'include'
+    });
 
+    if (res.ok) {
+      const sessions = await res.json();
+      chats = sessions.map(s => ({
+        id: s.id,
+        title: s.title,
+        messages: s.messages || [],
+        history: s.messages || [],
+        cards: s.cards || [],
+        roadmap: s.roadmap || [],
+        cardIndex: s.card_index || 0,
+        cardWrong: s.card_wrong || 0,
+        cardRight: s.card_right || 0,
+        loaded: true
+      }));
+      console.log(`Загружено ${chats.length} чатов с сервера`);
+    }
+  } catch (e) {
+    console.error("Ошибка загрузки сессий:", e);
+  }
+}
+async function saveCardsToBackend(sessionId, cards, index=0, wrong=0, right=0) {
+  try {
+    await fetch(`${API_BACKEND}/chat-sessions/${sessionId}/cards`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cards, cardIndex: index, cardWrong: wrong, cardRight: right})
+    });
+  } catch(e) {
+    console.warn("Не удалось сохранить карточки", e);
+  }
+}
+
+async function saveRoadmapToBackend(sessionId, roadmap) {
+  try {
+    await fetch(`${API_BACKEND}/chat-sessions/${sessionId}/roadmap`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({roadmap})
+    });
+  } catch(e) {
+    console.warn("Не удалось сохранить роадмап", e);
+  }
+}
 // ── FLASHCARDS (per-chat saved) ──
 let fcIndex=0, fcFlipped=false, fcWrong=0, fcRight=0;
 
@@ -1260,6 +1391,7 @@ async function openCards() {
   try {
     const raw = await callAI([{role:'user', content: prompt}], null, 1200);
     chat.cards = parseJSON(raw);
+    await saveCardsToBackend(chat.id, chat.cards);
     if (!Array.isArray(chat.cards) || chat.cards.length === 0) throw new Error('Пустой массив');
   } catch(e) {
     showToast('Ошибка карточек: ' + e.message);
@@ -1389,6 +1521,7 @@ async function openRoadmap() {
     rmSteps = parseJSON(raw);
     if (!Array.isArray(rmSteps) || rmSteps.length === 0) throw new Error('Пустой массив');
     chat.roadmap = rmSteps; // сохраняем в чат
+    await saveRoadmapToBackend(chat.id, rmSteps);
     chat.rmExpanded = 0;
   } catch(e) {
     showToast('Ошибка роадмапа: ' + e.message);
@@ -1431,6 +1564,18 @@ function rmToggle(i) {
 function closeRoadmap() { closeAllPanels(); }
 
 // ── INIT CHAT ──
-initNewChat();
+(async () => {
+  console.log("Запуск Study AI...");
+
+  await loadSessions();   // Загружаем сохранённые чаты
+
+  if (chats.length === 0) {
+    console.log("Нет чатов — создаём первый");
+    await initNewChat();
+  } else {
+    console.log(`Загружено ${chats.length} чатов`);
+    await switchChat(chats[0].id);
+  }
+})();
 </script>
 </body>
