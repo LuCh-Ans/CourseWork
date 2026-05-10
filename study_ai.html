@@ -1078,9 +1078,9 @@ function toggleHistory(){
   if(open) renderHistory();
 }
 
-function deleteChat(id){
+async function deleteChat(id){
   chats=chats.filter(c=>c.id!==id);
-  if(activeChatId===id){ chats.length>0 ? switchChat(chats[chats.length-1].id) : initNewChat(); } else { renderHistory(); }
+  chats.length > 0 ? await switchChat(chats[chats.length-1].id) : await initNewChat();
 }
 
 async function switchChat(id){
@@ -1121,6 +1121,9 @@ async function initNewChat(){
     return;
   }
 
+  if (isCreatingChat) return;
+  isCreatingChat = true;
+
   try {
     const res = await fetch(`${API_BACKEND}/chat-sessions`, {
       method: 'POST',
@@ -1144,12 +1147,14 @@ async function initNewChat(){
     gid('chat-title').textContent = newChat.title;
   } catch(e) {
     console.error(e);
+  } finally {
+    isCreatingChat = false;
   }
   renderHistory();
 }
 
-function newChat(){
-  initNewChat(); removeFile();
+async function newChat(){
+  await initNewChat(); removeFile();
   gid('hist-panel').classList.remove('open'); gid('chevron').classList.remove('open');
   gid('chat-input').focus();
 }
@@ -1158,7 +1163,7 @@ async function sendMessage(){
   const input=gid('chat-input');
   const text=input.value.trim();
   if(!text||isLoading) return;
-  if(!activeChatId) initNewChat();
+  if(!activeChatId) await initNewChat();
 
   const chat=activeChat();
   input.value='';
