@@ -1,6 +1,6 @@
 import uuid
 from pathlib import Path
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,9 +8,13 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import List
-
+from sqlalchemy.ext.asyncio import AsyncSession
+from database.session import get_db
+from database.user import User
+from auth.deps import get_current_user
+from database.chat import ChatService
 load_dotenv()
-import database  # noqa — регистрирует все модели
+import database
 
 from pdf_service import process_file, create_chunks, blocks_to_text
 from vector_search import VectorSearchService
@@ -90,25 +94,31 @@ async def document_page(doc_id: str):
 async def test() -> JSONResponse:
     return JSONResponse({"status": "ok", "message": "Server is running."})
 
+
 @app.post("/chat", tags=["Chat"])
 async def chat_endpoint(request: ChatRequest):
-    """Прокси к LLM для чат-интерфейса"""
+    """Прокси к LLM"""
     try:
         from llm.llm_client import _request
+
         history_lines = []
         for m in request.messages:
             prefix = "Пользователь" if m.role == "user" else "Ассистент"
             history_lines.append(f"{prefix}: {m.content}")
+
         history_text = "\n".join(history_lines)
-        system_prompt = request.system if request.system else (
+
+        system_prompt = request.system or (
             "Ты Study AI — умный учебный ассистент. Отвечай на русском языке. "
-            "Объясняй концепции чётко, с аналогиями и примерами. "
-            "Используй маркированные списки и **жирный** для ключевых терминов."
+            "Объясняй чётко, с примерами."
         )
+
         full_prompt = f"{system_prompt}\n\n{history_text}"
         answer = await _request(full_prompt)
+
         return {"answer": answer}
     except Exception as e:
+        print(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ask", tags=["RAG Query"])
@@ -123,49 +133,58 @@ async def ask_question(request: QuestionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/upload", tags=["Summarization"])
-async def upload_file(file: UploadFile = File(...)) -> JSONResponse:
-    original_name = file.filename or "unknown"
-    suffix = Path(original_name).suffix.lower()
 
-    if suffix not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=415,
-            detail=f"File type '{suffix}' is not supported. Allowed: {sorted(ALLOWED_EXTENSIONS)}",
-        )
+@app.post("/upload", tags=["Documents"])
+async def upload_file(
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    if not file.filename:
+        raise HTTPException(400, "No filename")
 
-    raw_bytes = await file.read()
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Allowed: {ALLOWED_EXTENSIONS}")
 
-    if not raw_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    # Сохраняем файл
+    file_path = UPLOAD_DIR / f"{uuid.uuid4()}{ext}"
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(413, "File too large")
 
-    if len(raw_bytes) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds the {MAX_FILE_SIZE_MB} MB size limit.",
-        )
+    with open(file_path, "wb") as f:
+        f.write(content)
 
-    unique_name = f"{uuid.uuid4().hex}{suffix}"
-    save_path = UPLOAD_DIR / unique_name
-    save_path.write_bytes(raw_bytes)
-
-    blocks = process_file(save_path)
-    if not blocks:
-        raise HTTPException(status_code=422, detail="No text could be extracted from the file.")
-
-    chunks = create_chunks(blocks)
-    search_service.build_index(chunks)
-    prompt_text = blocks_to_text(blocks)
-
+    # Обработка документа
     try:
-        summary = await summarize(prompt_text)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        text, summary_text = await process_file(file_path, file.filename)
 
-    return JSONResponse({
-        "original_filename": original_name,
-        "saved_as": unique_name,
-        "characters_extracted": len(prompt_text),
-        "blocks_count": len(blocks),
-        "summary": summary,
-    })
+        document = await documents_router.create_document(  # или напрямую через сервис
+            user_id=current_user.id,
+            filename=file.filename,
+            file_path=str(file_path),
+            text=text
+        )
+
+        # Автоматически создаём/привязываем чат
+        chat_service = ChatService(db)
+        session = await chat_service.create_session(
+            user_id=current_user.id,
+            title=Path(file.filename).stem[:80],  # красивое название
+            document_id=document.id
+        )
+
+        # Сохраняем summary
+        await chat_service.save_summary(session.id, summary_text)
+
+        return {
+            "success": True,
+            "document_id": str(document.id),
+            "session_id": str(session.id),
+            "title": session.title,
+            "summary": {"text": summary_text[:1500] + "..." if len(summary_text) > 1500 else summary_text}
+        }
+    except Exception as e:
+        print(f"Upload error: {e}")
+        raise HTTPException(500, str(e))

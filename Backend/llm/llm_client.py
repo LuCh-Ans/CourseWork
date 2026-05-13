@@ -63,14 +63,12 @@ async def summarize(text: str) -> str:
 
 
 async def _request(full_content: str) -> str:
-    """Единая функция для всех запросов"""
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    """Фиксированный запрос к Hugging Face"""
+    url = settings.BASE_URL
 
     headers = {
-        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {settings.HF_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:8000",
-        "X-Title": "StudyLab"
     }
 
     payload = {
@@ -79,16 +77,17 @@ async def _request(full_content: str) -> str:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": full_content}
         ],
-        "max_tokens": settings.LLM_MAX_TOKENS,
-        "temperature": settings.LLM_TEMPERATURE
+        "max_tokens": getattr(settings, "LLM_MAX_TOKENS", 2048),
+        "temperature": getattr(settings, "LLM_TEMPERATURE", 0.7),
     }
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post(url, json=payload, headers=headers)
 
         if response.status_code != 200:
-            print(f"ERROR: {response.status_code} - {response.text}")
-            raise RuntimeError(f"OpenRouter error: {response.text}")
+            error_text = response.text[:700]
+            print(f"❌ HF Error {response.status_code}: {error_text}")
+            raise RuntimeError(f"Hugging Face error: {error_text}")
 
         data = response.json()
         return data['choices'][0]['message']['content']

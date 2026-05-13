@@ -1,14 +1,15 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 from auth.deps import get_current_user
 from database.session import get_db
 from database.user import User
-from database.chat import ChatService, SessionSchema, SessionListItem, MessageSchema
-
+from database.chat import ChatService, SessionSchema, SessionListItem, MessageSchema, ChatSession
+from database.chat import ChatSession, ChatMessage, ChatService, SessionSchema, MessageSchema, SessionListItem
 router = APIRouter(prefix="/chat-sessions", tags=["Chat History"])
 
 
@@ -48,30 +49,81 @@ async def list_sessions(
     return await ChatService(db).get_sessions(current_user.id)
 
 
-@router.post("", response_model=SessionSchema, status_code=status.HTTP_201_CREATED)
+@router.post("")
 async def create_session(
-    body: CreateSessionRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+        session_data: CreateSessionRequest,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user),
 ):
-    session = await ChatService(db).create_session(
-        current_user.id, body.title, body.document_id
-    )
-    # Важно: не загружаем messages при создании
-    return await ChatService(db).get_session(session.id, current_user.id)
+    try:
+        if session_data.document_id:
+            existing_session = await db.scalar(
+                select(ChatSession).where(
+                    and_(
+                        ChatSession.document_id == session_data.document_id,
 
+                    )
+                )
+            )
+            if existing_session:
+                return {
+                    "id": existing_session.id,
+                    "title": existing_session.title,
+                    "created_at": existing_session.created_at.isoformat(),
+                    "document_id": existing_session.document_id,
+                }
 
-@router.get("/{session_id}", response_model=SessionSchema)
-async def get_chat_session(
-    session_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    session = await ChatService(db).get_session(session_id, current_user.id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session
+        if not session_data.document_id and session_data.title == "Новый чат":
+            empty_session = await db.scalar(
+                select(ChatSession).where(
+                    and_(
+                        ChatSession.title == "Новый чат",
+                        ChatSession.document_id.is_(None),
 
+                    )
+                )
+            )
+            if empty_session:
+                messages_count = await db.scalar(
+                    select(func.count()).where(
+                        ChatMessage.session_id == empty_session.id
+                    )
+                )
+                if messages_count == 0:
+                    return {
+                        "id": empty_session.id,
+                        "title": empty_session.title,
+                        "created_at": empty_session.created_at.isoformat(),
+                        "document_id": None,
+                    }
+
+        new_session = ChatSession(
+            title=session_data.title,
+            document_id=session_data.document_id,
+            user_id=current_user.id,  # ← важно привязать к пользователю
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(new_session)
+        await db.commit()
+        await db.refresh(new_session)
+
+        return {
+            "id": new_session.id,
+            "title": new_session.title,
+            "created_at": new_session.created_at.isoformat(),
+            "document_id": new_session.document_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+
+        print(f"create_session error: {e}")
+        import traceback
+        traceback.print_exc()
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка создания сессии: {str(e)}")
 
 @router.post("/{session_id}/messages", response_model=MessageSchema, status_code=status.HTTP_201_CREATED)
 async def add_chat_message(

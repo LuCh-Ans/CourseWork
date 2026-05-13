@@ -108,6 +108,15 @@ class ChatService:
         )
         return result.scalar_one_or_none()
 
+    async def get_session_by_document(self, user_id: uuid.UUID, document_id: uuid.UUID):
+        result = await self.db.execute(
+            select(ChatSession).where(
+                ChatSession.user_id == user_id,
+                ChatSession.document_id == document_id
+            ).order_by(ChatSession.created_at.desc())
+        )
+        return result.scalar_one_or_none()
+
     async def create_session(self, user_id: uuid.UUID, title: str = "Новый чат", document_id: Optional[uuid.UUID] = None) -> ChatSession:
         session = ChatSession(user_id=user_id, title=title, document_id=document_id)
         self.db.add(session)
