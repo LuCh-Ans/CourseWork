@@ -958,7 +958,20 @@ document.addEventListener('keydown', (e) => {
 
 let pendingHomeFile = null;
 
-function goToChat() { showScreen('chat'); gid('chat-input').focus(); }
+async function goToChat() {
+  showScreen('chat');
+  if (chats.length === 0 && !isCreatingChat) {
+    await loadSessions();
+    if (chats.length === 0) {
+      await initNewChat();
+    } else {
+      await switchChat(chats[0].id);
+    }
+  } else if (chats.length > 0 && !activeChatId) {
+    await switchChat(chats[0].id);
+  }
+  gid('chat-input').focus();
+}
 
 function onDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('dragging'); }
 function onDragLeave(e) { document.getElementById('dropZone').classList.remove('dragging'); }
@@ -987,6 +1000,15 @@ async function openFileInChat() {
   const file = pendingHomeFile;
   closeHomeOverlay();
   showScreen('chat');
+
+  if (chats.length === 0) {
+    await loadSessions();
+    if (chats.length === 0) await initNewChat();
+    else await switchChat(chats[0].id);
+  } else if (!activeChatId) {
+    await switchChat(chats[0].id);
+  }
+
   await uploadFileToBacked(file);
 }
 
@@ -1039,10 +1061,34 @@ async function callAI(messages, system, maxTokens=1000) {
 }
 
 function parseJSON(raw) {
-  const clean = raw.replace(/```json\s*/gi,'').replace(/```/g,'').trim();
-  const match = clean.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
-  if (match) return JSON.parse(match[1]);
-  return JSON.parse(clean);
+  if (!raw) return null;
+
+  let text = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start !== -1 && end !== -1) {
+    text = text.slice(start, end + 1);
+  }
+
+
+  text = text
+    .replace(/[\u2018\u2019]/g, "\\'")
+    .replace(/[\u201C\u201D]/g, '\\"')
+    .replace(/\\(?!["\\/bfnrtu])/g, '\\\\') // ← вот это главное исправление
+    .replace(/\r?\n/g, ' ')
+    .replace(/,\s*([}\]])/g, '$1');
+
+  try {
+    return JSON.parse(text);
+  } catch(e) {
+    try {
+      return JSON.parse(text);
+    } catch(e2) {
+      console.error("parseJSON failed:", e2.message, text.slice(0, 200));
+      return null;
+    }
+  }
 }
 
 function getChatContext(chat) {
@@ -1113,15 +1159,16 @@ async function switchChat(id){
   }
 }
 
+let isCreatingChat = false;
+
 async function initNewChat(){
-  // Если уже есть чат с названием "Новый чат" — не создаём новый
-  const existingNew = chats.find(c => c.title === "Новый чат");
+  if (isCreatingChat) return;
+  const existingNew = chats.find(c => c.title === "Новый чат" && (!c.history || c.history.length === 0));
   if (existingNew) {
     await switchChat(existingNew.id);
     return;
   }
 
-  if (isCreatingChat) return;
   isCreatingChat = true;
 
   try {
@@ -1390,8 +1437,8 @@ async function openCards() {
 
   const context = getChatContext(chat);
   const prompt = context
-    ? `На основе этого документа создай ровно 15 карточек для повторения. Верни ТОЛЬКО JSON без пояснений: [{"q":"вопрос","a":"ответ"}, ...]\n\n${context}`
-    : `Создай 15 карточек по теме: "${chat.title}". Верни ТОЛЬКО JSON: [{"q":"вопрос","a":"ответ"}, ...]`;
+    ? `На основе документа создай ровно 15 карточек. Отвечай ТОЛЬКО на русском языке. Верни ТОЛЬКО валидный JSON массив. Без пояснений, без markdown, без апострофов и спецсимволов в тексте. Используй только двойные кавычки:\n[{"q":"вопрос","a":"ответ"},...]\n\n${context}`
+    : `Создай 15 карточек по теме: "${chat.title}". Отвечай ТОЛЬКО на русском языке. Верни ТОЛЬКО валидный JSON. Без markdown, без апострофов. Только двойные кавычки:\n[{"q":"вопрос","a":"ответ"},...]`;
 
   try {
     const raw = await callAI([{role:'user', content: prompt}], null, 1200);
@@ -1562,25 +1609,11 @@ function renderRoadmap() {
 function rmToggle(i) {
   rmExpanded = rmExpanded === i ? -1 : i;
   const chat = activeChat();
-  if (chat) chat.rmExpanded = rmExpanded; // сохраняем открытый шаг
+  if (chat) chat.rmExpanded = rmExpanded;
   renderRoadmap();
 }
 
 function closeRoadmap() { closeAllPanels(); }
 
-// ── INIT CHAT ──
-(async () => {
-  console.log("Запуск Study AI...");
-
-  await loadSessions();   // Загружаем сохранённые чаты
-
-  if (chats.length === 0) {
-    console.log("Нет чатов — создаём первый");
-    await initNewChat();
-  } else {
-    console.log(`Загружено ${chats.length} чатов`);
-    await switchChat(chats[0].id);
-  }
-})();
 </script>
 </body>
