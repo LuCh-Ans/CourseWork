@@ -185,18 +185,18 @@ body { font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-seri
 
 <script>
 const ACHIEVEMENTS = [
-  { id:'first_chat',   icon:'🐣', color:'orange', name:'Первый шаг',       desc:'Открыл первый чат',               req: s => s.chats >= 1 },
-  { id:'streak3',      icon:'🔥', color:'orange', name:'3 дня подряд',      desc:'Занимался 3 дня без перерыва',    req: s => s.maxStreak >= 3 },
-  { id:'streak7',      icon:'⚡', color:'orange', name:'Неделя',            desc:'7 дней без перерыва',             req: s => s.maxStreak >= 7 },
-  { id:'streak30',     icon:'💎', color:'black',  name:'Месяц',             desc:'30 дней без перерыва',            req: s => s.maxStreak >= 30 },
-  { id:'days10',       icon:'📅', color:'green',  name:'10 дней занятий',   desc:'Провёл 10 учебных дней',          req: s => s.studyDays >= 10 },
-  { id:'days50',       icon:'🏆', color:'black',  name:'50 дней',           desc:'Провёл 50 учебных дней',          req: s => s.studyDays >= 50 },
-  { id:'chats5',       icon:'💬', color:'blue',   name:'Болтун',            desc:'Создал 5 чатов',                  req: s => s.chats >= 5 },
-  { id:'chats20',      icon:'🦜', color:'blue',   name:'Неугомонный',       desc:'Создал 20 чатов',                 req: s => s.chats >= 20 },
-  { id:'cards_done',   icon:'🃏', color:'orange', name:'Картограф',         desc:'Изучил первый набор карточек',    req: s => s.cardsDone >= 1 },
-  { id:'roadmap_done', icon:'🗺️', color:'green',  name:'Следопыт',          desc:'Открыл роадмап',                  req: s => s.roadmaps >= 1 },
-  { id:'hour1',        icon:'⏱️', color:'blue',   name:'Час в деле',        desc:'Провёл 1 час за учёбой',          req: s => s.totalMinutes >= 60 },
-  { id:'hour10',       icon:'🕐', color:'black',  name:'10 часов',          desc:'Суммарно 10 часов занятий',       req: s => s.totalMinutes >= 600 },
+  { id:'first_chat', icon:'🐣', color:'orange', name:'Первый шаг', desc:'Открыл первый чат', req: s => s.chats >= 1 },
+  { id:'streak3', icon:'🔥', color:'orange', name:'3 дня подряд', desc:'Занимался 3 дня без перерыва', req: s => s.maxStreak >= 3 },
+  { id:'streak7', icon:'⚡', color:'orange', name:'Неделя', desc:'7 дней без перерыва', req: s => s.maxStreak >= 7 },
+  { id:'streak30', icon:'💎', color:'black', name:'Месяц', desc:'30 дней без перерыва', req: s => s.maxStreak >= 30 },
+  { id:'days10', icon:'📅', color:'green', name:'10 дней занятий', desc:'Провёл 10 учебных дней', req: s => s.studyDays >= 10 },
+  { id:'days50', icon:'🏆', color:'black', name:'50 дней', desc:'Провёл 50 учебных дней', req: s => s.studyDays >= 50 },
+  { id:'chats5', icon:'💬', color:'blue', name:'Болтун', desc:'Создал 5 чатов', req: s => s.chats >= 5 },
+  { id:'chats20', icon:'🦜', color:'blue', name:'Неугомонный', desc:'Создал 20 чатов', req: s => s.chats >= 20 },
+  { id:'cards_done', icon:'🃏', color:'orange', name:'Картограф', desc:'Изучил первый набор карточек', req: s => s.cardsDone >= 1 },
+  { id:'roadmap_done', icon:'🗺️', color:'green', name:'Следопыт', desc:'Открыл роадмап', req: s => s.roadmaps >= 1 },
+  { id:'hour1', icon:'⏱️', color:'blue', name:'Час в деле', desc:'Провёл 1 час за учёбой', req: s => s.totalMinutes >= 60 },
+  { id:'hour10', icon:'🕐', color:'black', name:'10 часов', desc:'Суммарно 10 часов занятий', req: s => s.totalMinutes >= 600 },
 ];
 
 function loadStats() {
