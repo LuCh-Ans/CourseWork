@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Study AI</title>
+<!-- Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- Подсветка кода -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<!-- Математика (KaTeX) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1097,12 +1107,35 @@ function getChatContext(chat) {
   if (chat?.history?.length > 0) parts.push(chat.history.map(m => `${m.role==='user'?'Пользователь':'AI'}: ${m.content}`).join('\n\n'));
   return parts.length > 0 ? parts.join('\n\n---\n\n') : null;
 }
+function renderText(t) {
+  if (!t) return "";
 
-function renderText(t){
-  return String(t)
-    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-    .replace(/^[•\-] (.+)$/gm,'<div style="margin-left:14px;margin-bottom:4px"><span style="opacity:.4">•</span> $1</div>')
-    .replace(/\n/g,'<br>');
+  const mathBlocks = [];
+  let s = String(t);
+  s = s.replace(/\$\$[\s\S]*?\$\$|\$[^\n$]*?\$/g, (match) => {
+    const id = 'MATH${mathBlocks.length}MATH';
+    mathBlocks.push(match);
+    return id;
+  });
+   marked.setOptions({ breaks: true, gfm: true });
+  let html = marked.parse(s);
+  mathBlocks.forEach((formula, i) => {
+    html = html.replace('MATH${i}MATH', formula);
+  });
+
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+
+  renderMathInElement(tempDiv, {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false}
+    ],
+    throwOnError: false,
+    strict: false
+  });
+
+  return tempDiv.innerHTML;
 }
 
 function scrollBottom(){ const el=gid('messages'); el.scrollTop=el.scrollHeight; }
@@ -1312,7 +1345,13 @@ async function uploadFileToBacked(file) {
       gid('chat-title').textContent = chat.title;
       renderHistory();
     }
-    appendMsg('assistant', `Файл **${filename}** загружен и проанализирован. Задавай вопросы по его содержанию!`, chat);
+    const summaryMsg = summary 
+      ? `Файл **${filename}** загружен и проанализирован.\n\n**Краткое содержание:**\n\n${summary}`
+      : `Файл **${filename}** загружен. Задавай вопросы по его содержанию!`;
+    appendMsg('assistant', summaryMsg, chat);
+
+
+
   } catch(e) {
     thinkEl.remove();
     showToast('Ошибка соединения с сервером');
