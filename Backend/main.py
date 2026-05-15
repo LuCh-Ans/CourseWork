@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.session import get_db
 from database.user import User
@@ -17,11 +17,11 @@ load_dotenv()
 import database
 
 from pdf_service import process_file, create_chunks, blocks_to_text
-from vector_search import VectorSearchService
 from llm.llm_client import summarize, call_llm
 from auth.authent import router as auth_router
 from auth.documents import router as documents_router
 from auth.chat_router import router as chat_router
+from auth.profile_router import router as profile_router
 
 UPLOAD_DIR = Path("files/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,17 +37,18 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://0.0.0.0:8000"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
 app.include_router(auth_router)
 app.include_router(documents_router)
 app.include_router(chat_router)
-search_service = VectorSearchService()
+app.include_router(profile_router)
+
 
 class QuestionRequest(BaseModel):
     question: str
@@ -59,6 +60,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     system: str = ""
+    document_id: Optional[uuid.UUID] = None
 
 @app.get("/", response_class=HTMLResponse)
 async def home_page():
@@ -94,44 +96,52 @@ async def document_page(doc_id: str):
 async def test() -> JSONResponse:
     return JSONResponse({"status": "ok", "message": "Server is running."})
 
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_page():
+    html_path = Path("../frontend/study_ai_profile.html")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.post("/chat", tags=["Chat"])
-async def chat_endpoint(request: ChatRequest):
-    """Прокси к LLM"""
+async def chat_endpoint(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         from llm.llm_client import _request
+        from vector_search import search_chunks
 
         history_lines = []
         for m in request.messages:
             prefix = "Пользователь" if m.role == "user" else "Ассистент"
             history_lines.append(f"{prefix}: {m.content}")
-
         history_text = "\n".join(history_lines)
 
         system_prompt = request.system or (
-            "Ты Study AI — умный учебный ассистент. Отвечай на русском языке. "
-            "Объясняй чётко, с примерами."
+            "Ты Study AI — умный учебный ассистент. Отвечай на русском языке."
         )
 
-        full_prompt = f"{system_prompt}\n\n{history_text}"
-        answer = await _request(full_prompt)
+        # RAG — если передан document_id и есть вопрос пользователя
+        rag_context = ""
+        if request.document_id:
+            user_question = next(
+                (m.content for m in reversed(request.messages) if m.role == "user"), None
+            )
+            if user_question:
+                relevant_chunks = await search_chunks(db, request.document_id, user_question, top_k=5)
+                if relevant_chunks:
+                    rag_context = "\n\n---\nРЕЛЕВАНТНЫЕ ФРАГМЕНТЫ ДОКУМЕНТА:\n" + \
+                                  "\n\n".join(f"[{i+1}] {c}" for i, c in enumerate(relevant_chunks))
 
+        full_prompt = f"{system_prompt}{rag_context}\n\n{history_text}"
+        answer = await _request(full_prompt)
         return {"answer": answer}
+
     except Exception as e:
         print(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/ask", tags=["RAG Query"])
-async def ask_question(request: QuestionRequest):
-    try:
-        relevant_chunks = search_service.search(request.question, top_k=10)
-        if not relevant_chunks:
-            return {"answer": "В загруженном документе нет информации по этому вопросу."}
-        context_text = "\n\n".join([c["content"] for c in relevant_chunks])
-        answer = await call_llm(context_text, request.question)
-        return {"answer": answer}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/upload", tags=["Documents"])

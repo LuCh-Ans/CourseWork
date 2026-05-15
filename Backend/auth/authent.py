@@ -49,7 +49,8 @@ async def login(body: LoginRequest, response: Response, db: AsyncSession = Depen
         value=session_id,
         httponly=True,
         samesite="lax",
-        max_age=settings.SESSION_EXPIRE_SECONDS,
+        max_age=settings.SESSION_EXPIRE_SECONDS
+
     )
     return UserResponse(id=user.id, email=user.email, username=user.username)
 

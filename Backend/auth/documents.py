@@ -11,7 +11,8 @@ from database.user import User
 from database.document import DocumentListResponse, DocumentResponse
 from database.summary import SummaryResponse, UploadResponse
 from database.document import DocumentService
-
+from database.progress import UserProgress
+from sqlalchemy import select
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx"}
@@ -151,3 +152,32 @@ async def get_document(
             created_at=doc.summary.created_at,
         ),
     )
+
+@router.get("/profile")
+async def get_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Получаем прогресс пользователя
+    result = await db.execute(
+        select(UserProgress).where(UserProgress.user_id == current_user.id)
+    )
+    progress = result.scalar_one_or_none()
+
+    if not progress:
+        progress = UserProgress(user_id=current_user.id)
+        db.add(progress)
+        await db.commit()
+        await db.refresh(progress)
+
+    return {
+        "username": current_user.email,           # или username, если есть
+        "currentStreak": progress.current_streak or 0,
+        "maxStreak": progress.max_streak or 0,
+        "studyDays": progress.study_days or 0,
+        "chats": progress.chats_count or 0,
+        "cardsDone": progress.cards_done or 0,
+        "roadmaps": progress.roadmaps_count or 0,
+        "totalMinutes": progress.total_minutes or 0,
+        "activityMap": progress.activity_map or {}
+    }

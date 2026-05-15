@@ -1,43 +1,38 @@
-import os
 from pathlib import Path
-from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ENV_PATH = BASE_DIR / ".env"
-load_dotenv(dotenv_path=ENV_PATH)
-
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://alenapominova@localhost:5432/studylab")
-    SESSION_EXPIRE_SECONDS: int = int(os.getenv("SESSION_EXPIRE_SECONDS", 604800))
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "files/uploads")
-    MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", 10))
+    DATABASE_URL: str = "postgresql+asyncpg://studylab:studylab@db:5432/studylab"
+    SESSION_EXPIRE_SECONDS: int = 604800
+    UPLOAD_DIR: str = "files/uploads"
+    MAX_FILE_SIZE_MB: int = 10
 
-    TESSERACT_PATH: str = os.getenv("TESSERACT_PATH", "/opt/homebrew/bin/tesseract")
-    POPPLER_PATH: str = os.getenv("POPPLER_PATH", "")
+    TESSERACT_PATH: str = "/usr/bin/tesseract"
+    POPPLER_PATH: str = ""
 
-    HF_API_KEY: str = os.getenv("HF_API_KEY", "")
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+    GROQ_API_KEY: str = ""  
+    GEMINI_API_KEY: str = ""
 
-    BASE_URL: str = os.getenv("BASE_URL", "https://api-inference.huggingface.co/v1/chat/completions")
+    BASE_URL: str = "https://api.groq.com/openai/v1/chat/completions"
+    CURRENT_PROVIDER: str = "groq"
+    CURRENT_MODEL: str = "llama-3.3-70b-versatile"
 
-    CURRENT_PROVIDER: str = os.getenv("CURRENT_PROVIDER", "gemini")
-    CURRENT_MODEL: str = os.getenv("CURRENT_MODEL", "gemini-1.5-flash")  # Для HF тут будет Qwen/...
-
-    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", 1500))
-    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", 0.5))
+    LLM_MAX_TOKENS: int = 1024
+    LLM_TEMPERATURE: float = 0.3
 
 
 settings = Settings()
 
 if __name__ == "__main__":
-    print(f"--- Диагностика конфига ---")
-    print(f"Ищем .env тут: {ENV_PATH}")
+    print(f"Ищем .env: {BASE_DIR / '.env'} — {'ЕСТЬ' if (BASE_DIR / '.env').exists() else 'НЕТ'}")
     print(f"Provider: {settings.CURRENT_PROVIDER}")
     print(f"Model: {settings.CURRENT_MODEL}")
-    print(f"Base URL: {settings.BASE_URL}")
-    print(f"HF_KEY: {'ОК' if settings.HF_API_KEY else 'ПУСТО'}")
+    print(f"GROQ_KEY: {'OK' if settings.GROQ_KEY else 'ПУСТО'}")

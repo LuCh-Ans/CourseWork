@@ -27,14 +27,14 @@ class RenameSessionRequest(BaseModel):
     title: str
 
 class FlashcardsSaveRequest(BaseModel):
-    cards: List[Dict[str, Any]]
+    cards: List[Dict[str, Any]] = []
     cardIndex: Optional[int] = 0
     cardWrong: Optional[int] = 0
     cardRight: Optional[int] = 0
 
 
 class RoadmapSaveRequest(BaseModel):
-    roadmap: List[Dict[str, Any]]
+    roadmap: List[Dict[str, Any]] = []
 
 
 

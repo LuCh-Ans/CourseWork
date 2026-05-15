@@ -1,48 +1,56 @@
-import faiss
+from typing import List
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from typing import List, Dict
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, text
+import uuid
 
-class VectorSearchService:
-    def __init__(self, model_name: str = "intfloat/multilingual-e5-small"):
-        """
-        Инициализация сервиса поиска.
-        Загружает модель один раз при старте сервера.
-        """
-        self.model = SentenceTransformer(model_name)
-        self.index = None
-        self.chunks: List[Dict] = []
+_model = None
 
-    def build_index(self, chunks: List[Dict]):
-        """
-        Создает векторный индекс из предоставленных чанков текста.
-        """
-        if not chunks:
-            return
-            
-        self.chunks = chunks
-        texts = [c["content"] for c in chunks]
-        embeddings = self.model.encode(texts, normalize_embeddings=True)        
-        dimension = embeddings.shape[1]
-        self.index = faiss.IndexFlatL2(dimension)
-        self.index.add(np.array(embeddings).astype('float32'))
-        print(f"--- FAISS: Индексировано {len(texts)} чанков ---")
+def get_model() -> SentenceTransformer:
+    global _model
+    if _model is None:
+        _model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
+    return _model
 
-    def search(self, query: str, top_k: int = 3) -> List[Dict]:
-        """
-        Ищет наиболее релевантные фрагменты текста для заданного вопроса.
-        """
-        if self.index is None or not self.chunks:
-            print("Ошибка: Попытка поиска по пустому индексу.")
-            return []
-        query_vector = self.model.encode([query], normalize_embeddings=True)
-        distances, indices = self.index.search(
-            np.array(query_vector).astype('float32'), 
-            top_k
+
+def embed(texts: List[str]) -> List[List[float]]:
+    model = get_model()
+    return model.encode(texts, convert_to_numpy=True).tolist()
+
+
+async def save_chunks(db: AsyncSession, document_id: uuid.UUID, chunks: List[dict]):
+    from database.chunk import DocumentChunk
+    texts = [c["content"] for c in chunks]
+    embeddings = embed(texts)
+    for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
+        db_chunk = DocumentChunk(
+            document_id=document_id,
+            chunk_index=i,
+            content=chunk["content"],
+            embedding=emb,
         )
-        results = []
-        for idx in indices[0]:
-            if idx != -1 and idx < len(self.chunks):
-                results.append(self.chunks[idx])
-                
-        return results
+        db.add(db_chunk)
+    await db.flush()
+
+
+async def search_chunks(db: AsyncSession, document_id: uuid.UUID, query: str, top_k: int = 5) -> List[str]:
+    from database.chunk import DocumentChunk
+    query_emb = embed([query])[0]
+    result = await db.execute(
+        select(DocumentChunk).where(DocumentChunk.document_id == document_id)
+    )
+    chunks = result.scalars().all()
+    if not chunks:
+        return []
+
+    scores = []
+    for chunk in chunks:
+        if chunk.embedding:
+            a = np.array(query_emb)
+            b = np.array(chunk.embedding)
+            score = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
+            scores.append((score, chunk.content))
+
+    scores.sort(reverse=True)
+    return [content for _, content in scores[:top_k]]
