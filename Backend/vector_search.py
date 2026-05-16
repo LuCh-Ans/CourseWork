@@ -2,7 +2,7 @@ from typing import List
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select
 import uuid
 
 _model = None
@@ -10,13 +10,13 @@ _model = None
 def get_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        _model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
+        # Оставляем новую модель из репозитория — она качественнее работает с русским языком
+        _model = SentenceTransformer('intfloat/multilingual-e5-small')
     return _model
 
 
 def embed(texts: List[str]) -> List[List[float]]:
-    model = get_model()
-    return model.encode(texts, convert_to_numpy=True).tolist()
+    return get_model().encode(texts, convert_to_numpy=True).tolist()
 
 
 async def save_chunks(db: AsyncSession, document_id: uuid.UUID, chunks: List[dict]):
@@ -24,13 +24,12 @@ async def save_chunks(db: AsyncSession, document_id: uuid.UUID, chunks: List[dic
     texts = [c["content"] for c in chunks]
     embeddings = embed(texts)
     for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-        db_chunk = DocumentChunk(
+        db.add(DocumentChunk(
             document_id=document_id,
             chunk_index=i,
             content=chunk["content"],
             embedding=emb,
-        )
-        db.add(db_chunk)
+        ))
     await db.flush()
 
 

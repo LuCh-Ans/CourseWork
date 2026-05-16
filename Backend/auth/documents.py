@@ -12,7 +12,8 @@ from database.document import DocumentListResponse, DocumentResponse
 from database.summary import SummaryResponse, UploadResponse
 from database.document import DocumentService
 from database.progress import UserProgress
-from sqlalchemy import select
+from database.chat import ChatService, ChatSession
+from sqlalchemy import select, and_
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx"}
@@ -65,6 +66,26 @@ async def upload_document(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    # Создаём чат-сессию с именем файла (без расширения, макс. 80 символов)
+    chat_title = Path(original_name).stem[:80]
+    try:
+        # Проверяем, нет ли уже сессии для этого документа
+        existing_session = await db.scalar(
+            select(ChatSession).where(
+                and_(ChatSession.document_id == doc.id)
+            )
+        )
+        if not existing_session:
+            chat_service = ChatService(db)
+            await chat_service.create_session(
+                user_id=current_user.id,
+                title=chat_title,
+                document_id=doc.id,
+            )
+    except Exception as e:
+        # Не блокируем загрузку из-за ошибки создания сессии
+        print(f"Warning: could not create chat session for document {doc.id}: {e}")
 
     return UploadResponse(
         document=DocumentResponse(

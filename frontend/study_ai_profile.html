@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study AI — Профиль</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif; background: #e0ddd8; min-height: 100vh; }
+
+.page { max-width: 1200px; margin: 0 auto; padding: 28px 36px 60px; }
+
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 36px; }
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-text { font-size: 22px; font-weight: 500; color: #111; }
+.btn-back { background: #111; color: #f5ece4; border: none; border-radius: 50px; padding: 12px 24px; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: inherit; }
+.btn-back:hover { background: #333; }
+
+.user-row { display: flex; align-items: center; gap: 20px; margin-bottom: 32px; }
+.avatar { width: 72px; height: 72px; border-radius: 50%; background: rgba(0,0,0,.1); display: flex; align-items: center; justify-content: center; }
+.username { font-size: 40px; font-weight: 600; color: #111; letter-spacing: -.5px; }
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; align-items: stretch; }
+.stat-card { background: rgba(255,255,255,.6); backdrop-filter: blur(12px); border-radius: 20px; padding: 24px 28px; border: 1px solid rgba(255,255,255,.7); min-height: 160px; }
+
+.streak-card { display: flex; align-items: flex-start; gap: 32px; }
+.streak-num { font-size: 64px; font-weight: 700; color: #111; line-height: 1; }
+.streak-info { flex: 1; padding-top: 4px; }
+.streak-label { font-size: 18px; font-weight: 600; color: #111; margin-bottom: 2px; }
+.streak-record { font-size: 13px; color: rgba(26,26,26,.45); margin-bottom: 12px; }
+.streak-hint { font-size: 12px; color: rgba(26,26,26,.4); margin-top: 6px; }
+
+/* Week dots — отдельные стили, не наследуют от cal-day-label */
+.week-dots { display: flex; gap: 8px; margin-bottom: 4px; }
+.week-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.week-dow { font-size: 11px; color: rgba(26,26,26,.4); text-align: center; line-height: 1; }
+.day-dot { width: 28px; height: 28px; border-radius: 8px; background: rgba(0,0,0,.1); }
+.day-dot.done { background: #F5A623; }
+.day-dot.today { background: #111; }
+
+/* Timer — фиксированная ширина цифр чтобы не дёргалось */
+.timer-wrap { text-align: right; min-width: 148px; flex-shrink: 0; }
+.timer-label { font-size: 13px; color: rgba(26,26,26,.4); margin-bottom: 8px; }
+.timer { font-size: 38px; font-weight: 300; color: #111; letter-spacing: -1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timer sup { font-size: 12px; font-weight: 400; color: rgba(26,26,26,.45); vertical-align: super; margin-left: 1px; margin-right: 2px; }
+
+.metrics-card { display: flex; align-items: center; justify-content: space-around; height: 100%; }
+.metric { text-align: center; }
+.metric-num { font-size: 48px; font-weight: 700; color: #111; line-height: 1; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.metric-label { font-size: 13px; color: rgba(26,26,26,.45); line-height: 1.3; }
+
+.section-title { font-size: 14px; font-weight: 600; color: rgba(26,26,26,.45); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 16px; }
+
+/* Calendar */
+.calendar-wrap { background: rgba(255,255,255,.6); backdrop-filter: blur(12px); border-radius: 20px; padding: 24px 28px; border: 1px solid rgba(255,255,255,.7); margin-bottom: 32px; }
+.calendar { display: flex; gap: 0; width: 100%; }
+
+/* Левая колонка с подписями дней — высота строк ДОЛЖНА совпадать с ячейками */
+.cal-months { display: flex; gap: 8px; width: 100%; justify-content: space-between; }
+.cal-month { display: flex; flex-direction: column; }
+.cal-month-name { font-size: 11px; color: rgba(26,26,26,.45); font-weight: 500; margin-bottom: 5px; white-space: nowrap; }
+.cal-month-grid { display: flex; gap: 3px; }
+.cal-week { display: flex; flex-direction: column; gap: 3px; }
+.cal-cell { width: 14px; height: 14px; border-radius: 3px; background: rgba(0,0,0,.1); flex-shrink: 0; }
+.cal-cell.active { background: #F5A623; }
+.cal-cell.today { background: #111; }
+.cal-cell.empty { background: transparent; }
+
+/* Achievements — локированный бейдж поверх фильтра */
+.achievements-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.ach-card { background: rgba(255,255,255,.6); backdrop-filter: blur(12px); border-radius: 16px; padding: 16px; border: 1px solid rgba(255,255,255,.7); display: flex; flex-direction: column; align-items: flex-start; gap: 10px; transition: transform .15s; position: relative; }
+.ach-card:hover { transform: translateY(-2px); }
+
+/* Заблокированные: серость только на иконке и тексте, НЕ на бейдже */
+.ach-card.locked .ach-icon,
+.ach-card.locked .ach-name,
+.ach-card.locked .ach-desc { opacity: .4; filter: grayscale(1); }
+
+.ach-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.ach-icon.orange { background: rgba(245,166,35,.2); }
+.ach-icon.black  { background: rgba(26,26,26,.1); }
+.ach-icon.green  { background: rgba(39,174,96,.15); }
+.ach-icon.blue   { background: rgba(41,128,185,.12); }
+.ach-name { font-size: 13px; font-weight: 600; color: #111; line-height: 1.3; }
+.ach-desc { font-size: 12px; color: rgba(26,26,26,.45); line-height: 1.4; }
+.ach-badge { font-size: 10px; font-weight: 600; border-radius: 6px; padding: 3px 8px; margin-top: auto; }
+.ach-badge.unlocked { color: #7a4200; background: rgba(245,166,35,.3); }
+.ach-badge.locked-badge { color: #fff; background: rgba(26,26,26,.55); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="logo">
+      <!-- твоя ворона с лапами, 36px -->
+      <svg width="36" height="45" viewBox="0 0 97 126" fill="none">
+        <path d="M78.627 45.624C88.622 64.047 91.21 71.933 76.105 80.128C60.999 88.322 41.44 89.643 31.446 71.219C21.451 52.795 29.013 29.362 44.119 21.167C59.225 12.972 68.632 27.2 78.627 45.624Z" fill="black"/>
+        <path d="M21.677 94.908C14.163 108.54 16.716 111.497 12.759 109.046C8.802 106.595 4.567 94.582 12.08 80.949C19.594 67.317 36.012 56.215 39.968 58.666C43.925 61.117 29.191 81.276 21.677 94.908Z" fill="black"/>
+        <path d="M15.434 62.751C7.246 75.991 2.946 74.962 7.621 77.533C12.296 80.103 26.063 78.561 34.251 65.321C42.439 52.081 42.893 31.693 38.218 29.123C33.543 26.553 23.622 49.512 15.434 62.751Z" fill="black"/>
+        <path d="M78.368 31.052C93.929 30.816 95.3 24.202 95.176 27.269C95.052 30.335 86.704 40.909 71.143 41.144C55.582 41.38 37.722 35.703 37.846 32.636C37.97 29.57 62.807 31.287 78.368 31.052Z" fill="black"/>
+        <path d="M53.527 75.451C62.746 62.903 67.734 64.773 62.285 61.201C56.836 57.63 40.955 56.769 31.736 69.317C22.518 81.865 22.367 103.39 27.816 106.961C33.265 110.532 44.309 87.998 53.527 75.451Z" fill="black"/>
+        <path d="M76.664 81.636C80.877 74.43 84.671 76.269 80.258 73.248C75.846 70.226 67.074 66.401 62.861 73.606C58.648 80.812 62.892 90.532 67.304 93.553C71.717 96.575 72.451 88.841 76.664 81.636Z" fill="black"/>
+        <path d="M62.7 84.438C67.444 77.373 71.368 80.653 65.756 77.314C60.143 73.975 49.119 69.552 44.376 76.617C39.632 83.682 46.3 92.639 51.913 95.978C57.525 99.317 57.957 91.503 62.7 84.438Z" fill="black"/>
+        <path d="M73.611 27.569C75.377 22.698 76.837 17.628 78.455 12.706C81.213 4.316 86.879-1.869 82.798 0.525C81.545 1.26 80.411 2.21 79.373 3.227C71.281 11.152 66.148 19.89 66.175 31.987C66.2 43.575 64.12 45.519 70.28 39.705C71.836 38.236 73.307 36.627 74.421 34.8C78.332 28.384 71.072 34.572 73.611 27.569Z" fill="black"/>
+        <circle cx="55.701" cy="32.966" r="4.362" fill="#D9D9D9"/>
+        <circle cx="56.574" cy="32.093" r="1.745" fill="black"/>
+        <path d="M73.407 13.313C75.919 16.813 75.657 21.3 70.989 24.652C66.32 28.004 64.088 27.785 61.575 24.285C59.063 20.786 61.623 24.597 66.292 21.246C70.96 17.894 70.894 9.814 73.407 13.313Z" fill="black"/>
+        <path d="M55.4 114.1C54.121 114.06 53.234 109.725 53.539 100.985C53.844 92.246 54.373 89.696 55.652 89.736C56.931 89.776 56.006 89.202 55.702 97.941C55.397 106.68 56.679 114.14 55.4 114.1Z" fill="black"/>
+        <path d="M45.894 113.281C46.503 112.155 50.282 109.168 56.617 113.482C63.513 117.216 65.585 124.555 60.886 124.892C60.277 126.017 62.632 118.956 55.736 115.222C48.841 111.488 45.284 114.406 45.894 113.281Z" fill="black"/>
+        <path d="M55.456 112.635L55.393 113.269C55.675 113.704 57.725 113.846 57.973 114.402C61.254 119.823 58.378 124.208 54.549 122.774C53.454 123.437 59.185 118.748 55.903 113.326C55.756 113.083 55.607 112.853 55.456 112.635Z" fill="black"/>
+        <path d="M72.397 113.3C75.904 119.34 73.554 122.755 74.579 122.09C75.547 121.462 77.821 118.142 74.733 113.114L72.397 113.3Z" fill="black"/>
+        <path d="M61.016 113.662C61.394 112.44 64.517 108.772 71.572 111.765C79.064 114.081 82.53 120.875 77.988 122.122C77.61 123.345 78.54 115.96 71.048 113.644C63.556 111.329 60.638 114.885 61.016 113.662Z" fill="black"/>
+        <path d="M69.221 112.356C67.601 112.302 66.441 109.697 66.704 101.726C66.967 93.756 67.601 91.436 69.221 91.49C70.841 91.543 69.122 91.288 68.859 99.258C68.595 107.229 70.841 112.409 69.221 112.356Z" fill="black"/>
+      </svg>
+      <span class="logo-text">Study AI</span>
+    </div>
+    <button class="btn-back" onclick="window.location.href='/'">
+      Вернуться в чат
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+
+  <div class="user-row">
+    <div class="avatar">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+    </div>
+    <div class="username" id="username-display">Пользователь</div>
+  </div>
+
+  <div class="stats-grid">
+    <!-- Streak card -->
+    <div class="stat-card">
+      <div class="streak-card">
+        <div>
+          <div class="streak-num" id="streak-num">0</div>
+        </div>
+        <div class="streak-info">
+          <div class="streak-label" id="streak-label">дней без перерыва</div>
+          <div class="streak-record" id="streak-record">рекорд — 0 дней</div>
+          <div class="week-dots" id="week-dots"></div>
+          <div class="streak-hint" id="streak-hint">Начните серию сегодня</div>
+        </div>
+        <div class="timer-wrap">
+          <div class="timer-label">до конца дня</div>
+          <div class="timer" id="timer">00<sup>ч</sup>00<sup>мин</sup>00<sup>с</sup></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics card -->
+    <div class="stat-card">
+      <div class="metrics-card">
+        <div class="metric">
+          <div class="metric-num" id="days-count">0</div>
+          <div class="metric-label" id="days-label">дней занятий</div>
+        </div>
+        <div style="width:1px;height:60px;background:rgba(0,0,0,.08)"></div>
+        <div class="metric">
+          <div class="metric-num" id="chats-count">0</div>
+          <div class="metric-label" id="chats-label">чатов</div>
+        </div>
+        <div style="width:1px;height:60px;background:rgba(0,0,0,.08)"></div>
+        <div class="metric">
+          <div class="metric-num" id="max-streak">0</div>
+          <div class="metric-label" id="max-streak-label">дней без перерыва<br>максимально</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calendar -->
+  <div class="section-title">активность</div>
+  <div class="calendar-wrap">
+    <div class="calendar">
+      <div class="cal-months" id="cal-months"></div>
+    </div>
+  </div>
+
+  <!-- Achievements -->
+  <div class="section-title">достижения</div>
+  <div class="achievements-grid" id="achievements"></div>
+
+</div>
+
+<script>
+const ACHIEVEMENTS = [
+  { id:'first_chat', icon:'🐣', color:'orange', name:'Первый шаг', desc:'Открыл первый чат', req: s => s.chats >= 1 },
+  { id:'streak3', icon:'🔥', color:'orange', name:'3 дня подряд', desc:'Занимался 3 дня без перерыва', req: s => s.maxStreak >= 3 },
+  { id:'streak7', icon:'⚡', color:'orange', name:'Неделя', desc:'7 дней без перерыва', req: s => s.maxStreak >= 7 },
+  { id:'streak30', icon:'💎', color:'black', name:'Месяц', desc:'30 дней без перерыва', req: s => s.maxStreak >= 30 },
+  { id:'days10', icon:'📅', color:'green', name:'10 дней занятий', desc:'Провёл 10 учебных дней', req: s => s.studyDays >= 10 },
+  { id:'days50', icon:'🏆', color:'black', name:'50 дней', desc:'Провёл 50 учебных дней', req: s => s.studyDays >= 50 },
+  { id:'chats5', icon:'💬', color:'blue', name:'Болтун', desc:'Создал 5 чатов', req: s => s.chats >= 5 },
+  { id:'chats20', icon:'🦜', color:'blue', name:'Неугомонный', desc:'Создал 20 чатов', req: s => s.chats >= 20 },
+  { id:'cards_done', icon:'🃏', color:'orange', name:'Картограф', desc:'Изучил первый набор карточек', req: s => s.cardsDone >= 1 },
+  { id:'roadmap_done', icon:'🗺️', color:'green', name:'Следопыт', desc:'Открыл роадмап', req: s => s.roadmaps >= 1 },
+  { id:'hour1', icon:'⏱️', color:'blue', name:'Час в деле', desc:'Провёл 1 час за учёбой', req: s => s.totalMinutes >= 60 },
+  { id:'hour10', icon:'🕐', color:'black', name:'10 часов', desc:'Суммарно 10 часов занятий', req: s => s.totalMinutes >= 600 },
+];
+
+function loadStats() {
+  try { return JSON.parse(localStorage.getItem('studyai_stats') || '{}'); } catch { return {}; }
+}
+function saveStats(s) { localStorage.setItem('studyai_stats', JSON.stringify(s)); }
+
+function initStats() {
+  const s = loadStats();
+  if (!s.createdAt) {
+    s.createdAt = Date.now();
+    s.chats = 0;
+    s.studyDays = 0;
+    s.maxStreak = 0;
+    s.currentStreak = 0;
+    s.lastStudyDate = null;
+    s.activityMap = {};
+    s.cardsDone = 0;
+    s.roadmaps = 0;
+    s.totalMinutes = 0;
+    s.sessionStart = Date.now();
+    saveStats(s);
+  }
+  if (!s.sessionStart) { s.sessionStart = Date.now(); saveStats(s); }
+  return s;
+}
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function updateStreak(s) {
+  const today = todayKey();
+  if (s.lastStudyDate === today) return;
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
+  if (s.lastStudyDate === yKey) { s.currentStreak = (s.currentStreak||0) + 1; }
+  else { s.currentStreak = 1; }
+  s.maxStreak = Math.max(s.maxStreak||0, s.currentStreak);
+  s.lastStudyDate = today;
+  s.activityMap = s.activityMap || {};
+  s.activityMap[today] = (s.activityMap[today]||0) + 1;
+  s.studyDays = Object.keys(s.activityMap).length;
+  saveStats(s);
+}
+
+function renderWeekDots(s) {
+  const days = ['пн','вт','ср','чт','пт','сб','вс'];
+  const today = new Date();
+  const todayDow = today.getDay() === 0 ? 6 : today.getDay() - 1;
+  const container = document.getElementById('week-dots');
+  container.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - todayDow + i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const isToday = i === todayDow;
+    const isDone = s.activityMap && s.activityMap[key];
+    const col = document.createElement('div');
+    col.className = 'week-col';
+    col.innerHTML = `<div class="week-dow">${days[i]}</div><div class="day-dot ${isToday?'today':(isDone?'done':'')}"></div>`;
+    container.appendChild(col);
+  }
+}
+
+function renderCalendar(s) {
+  const act = s.activityMap || {};
+  const today = new Date();
+  const todayKey2 = todayKey();
+  const months = [];
+  const start = new Date(today);
+  start.setMonth(start.getMonth() - 7);
+  start.setDate(1);
+  let cur = new Date(start);
+  while (cur <= today) {
+    const mName = cur.toLocaleDateString('ru', {month:'long'});
+    const mKey = `${cur.getFullYear()}-${cur.getMonth()}`;
+    months.push({ name: mName, key: mKey, year: cur.getFullYear(), month: cur.getMonth() });
+    cur.setMonth(cur.getMonth()+1);
+  }
+  const container = document.getElementById('cal-months');
+  container.innerHTML = '';
+  const RU_MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  for (const m of months) {
+    const mDiv = document.createElement('div');
+    mDiv.className = 'cal-month';
+    mDiv.innerHTML = `<div class="cal-month-name">${RU_MONTHS[m.month]}</div>`;
+    const grid = document.createElement('div');
+    grid.className = 'cal-month-grid';
+    const firstDay = new Date(m.year, m.month, 1);
+    const lastDay = new Date(m.year, m.month+1, 0);
+    const startDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay()-1;
+    const totalDays = lastDay.getDate();
+    const weeks = Math.ceil((startDow + totalDays) / 7);
+    for (let w = 0; w < weeks; w++) {
+      const wDiv = document.createElement('div'); wDiv.className = 'cal-week';
+      for (let d = 0; d < 7; d++) {
+        const dayNum = w*7 + d - startDow + 1;
+        const cell = document.createElement('div');
+        if (dayNum < 1 || dayNum > totalDays) {
+          cell.className = 'cal-cell empty';
+        } else {
+          const dKey = `${m.year}-${String(m.month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+          const future = new Date(m.year, m.month, dayNum) > today;
+          cell.className = 'cal-cell' + (future ? ' empty' : (dKey === todayKey2 ? ' today' : (act[dKey] ? ' active' : '')));
+          cell.title = dKey;
+        }
+        wDiv.appendChild(cell);
+      }
+      grid.appendChild(wDiv);
+    }
+    mDiv.appendChild(grid);
+    container.appendChild(mDiv);
+  }
+}
+
+function renderAchievements(s) {
+  const stats = {
+    chats: s.chats||0, studyDays: s.studyDays||0,
+    maxStreak: s.maxStreak||0, cardsDone: s.cardsDone||0,
+    roadmaps: s.roadmaps||0, totalMinutes: s.totalMinutes||0
+  };
+  const container = document.getElementById('achievements');
+  container.innerHTML = '';
+  for (const a of ACHIEVEMENTS) {
+    const unlocked = a.req(stats);
+    const card = document.createElement('div');
+    card.className = 'ach-card' + (unlocked ? '' : ' locked');
+    card.innerHTML = `
+      <div class="ach-icon ${a.color}">${a.icon}</div>
+      <div>
+        <div class="ach-name">${a.name}</div>
+        <div class="ach-desc">${a.desc}</div>
+      </div>
+      <div class="ach-badge ${unlocked ? 'unlocked' : 'locked-badge'}">${unlocked ? 'Получено' : 'Заблокировано'}</div>`;
+    container.appendChild(card);
+  }
+}
+
+function renderTimer() {
+  const now = new Date();
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  const remaining = Math.max(0, Math.floor((endOfDay - now) / 1000));
+  const h = Math.floor(remaining / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const sec = remaining % 60;
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('timer').innerHTML =
+    `${pad(h)}<sup>ч</sup>${pad(m)}<sup>мин</sup>${pad(sec)}<sup>с</sup>`;
+}
+
+function plural(n, one, few, many) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 19) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
+
+function render() {
+  const s = initStats();
+  updateStreak(s);
+  const streak = s.currentStreak || 0;
+  const maxS = s.maxStreak || 0;
+  const days = s.studyDays || 0;
+  const chats = s.chats || 0;
+
+  document.getElementById('streak-num').textContent = streak;
+  document.getElementById('streak-label').textContent = plural(streak, 'день без перерыва', 'дня без перерыва', 'дней без перерыва');
+  document.getElementById('streak-record').textContent = `рекорд — ${maxS} ${plural(maxS, 'день', 'дня', 'дней')}`;
+  document.getElementById('streak-hint').textContent = streak > 0 ? 'Продолжите серию!' : 'Начните серию сегодня';
+
+  document.getElementById('days-count').textContent = days;
+  document.getElementById('days-label').textContent = plural(days, 'день занятий', 'дня занятий', 'дней занятий');
+
+  document.getElementById('chats-count').textContent = chats;
+  document.getElementById('chats-label').textContent = plural(chats, 'чат', 'чата', 'чатов');
+
+  document.getElementById('max-streak').textContent = maxS;
+  document.getElementById('max-streak-label').textContent = `${plural(maxS, 'день', 'дня', 'дней')} без перерыва максимально`;
+
+  const user = localStorage.getItem('studyai_username') || 'Пользователь';
+  document.getElementById('username-display').textContent = user;
+  renderWeekDots(s);
+  renderCalendar(s);
+  renderAchievements(s);
+}
+
+async function loadProfileFromAPI() {
+    try {
+        const res = await fetch('http://127.0.0.1:8000/profile/me', { credentials: 'include' });
+        if (!res.ok) { window.location.href = '/'; return; }
+        const data = await res.json();
+        const existing = loadStats();
+        const s = {
+            ...existing,
+            currentStreak: data.currentStreak,
+            maxStreak: data.maxStreak,
+            studyDays: data.studyDays,
+            chats: data.chats,
+            cardsDone: data.cardsDone,
+            roadmaps: data.roadmaps,
+            totalMinutes: data.totalMinutes,
+            activityMap: data.activityMap,
+        };
+        saveStats(s);
+        localStorage.setItem('studyai_username', data.username);
+    } catch(e) {
+        console.error('Profile load error:', e);
+    }
+    render();
+}
+
+loadProfileFromAPI();
+renderTimer();
+setInterval(() => { renderTimer(); }, 1000);
+
+window.incrementStat = function(key, amount=1) {
+  const s = loadStats();
+  s[key] = (s[key]||0) + amount;
+  saveStats(s);
+  render();
+};
+</script>
+</body>
+</html>

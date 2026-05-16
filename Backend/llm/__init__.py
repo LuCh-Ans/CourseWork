@@ -1,0 +1,1 @@
+from database.chunk import DocumentChunk

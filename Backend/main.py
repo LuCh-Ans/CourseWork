@@ -4,7 +4,6 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import List, Optional
@@ -13,6 +12,7 @@ from database.session import get_db
 from database.user import User
 from auth.deps import get_current_user
 from database.chat import ChatService
+
 load_dotenv()
 import database
 
@@ -37,7 +37,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://0.0.0.0:8000"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,7 +48,6 @@ app.include_router(auth_router)
 app.include_router(documents_router)
 app.include_router(chat_router)
 app.include_router(profile_router)
-
 
 class QuestionRequest(BaseModel):
     question: str
@@ -121,7 +120,6 @@ async def chat_endpoint(
             "Ты Study AI — умный учебный ассистент. Отвечай на русском языке."
         )
 
-        # RAG — если передан document_id и есть вопрос пользователя
         rag_context = ""
         if request.document_id:
             user_question = next(
@@ -138,10 +136,8 @@ async def chat_endpoint(
         return {"answer": answer}
 
     except Exception as e:
-        print(f"Chat error: {e}")
+        print(f"Chat error: {e}", flush=True)
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 
 @app.post("/upload", tags=["Documents"])
@@ -157,7 +153,6 @@ async def upload_file(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Allowed: {ALLOWED_EXTENSIONS}")
 
-    # Сохраняем файл
     file_path = UPLOAD_DIR / f"{uuid.uuid4()}{ext}"
     content = await file.read()
     if len(content) > MAX_FILE_SIZE_BYTES:
@@ -166,26 +161,23 @@ async def upload_file(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # Обработка документа
     try:
         text, summary_text = await process_file(file_path, file.filename)
 
-        document = await documents_router.create_document(  # или напрямую через сервис
+        document = await documents_router.create_document(
             user_id=current_user.id,
             filename=file.filename,
             file_path=str(file_path),
             text=text
         )
 
-        # Автоматически создаём/привязываем чат
         chat_service = ChatService(db)
         session = await chat_service.create_session(
             user_id=current_user.id,
-            title=Path(file.filename).stem[:80],  # красивое название
+            title=Path(file.filename).stem[:80],
             document_id=document.id
         )
 
-        # Сохраняем summary
         await chat_service.save_summary(session.id, summary_text)
 
         return {
@@ -196,5 +188,5 @@ async def upload_file(
             "summary": {"text": summary_text[:1500] + "..." if len(summary_text) > 1500 else summary_text}
         }
     except Exception as e:
-        print(f"Upload error: {e}")
+        print(f"Upload error: {e}", flush=True)
         raise HTTPException(500, str(e))

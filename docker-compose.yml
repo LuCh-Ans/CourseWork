@@ -18,6 +18,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
     ports:
       - "8000:8000"

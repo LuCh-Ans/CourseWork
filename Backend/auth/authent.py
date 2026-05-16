@@ -50,7 +50,7 @@ async def login(body: LoginRequest, response: Response, db: AsyncSession = Depen
         httponly=True,
         samesite="lax",
         max_age=settings.SESSION_EXPIRE_SECONDS
-
+        # domain="localhost" убран, чтобы кука работала везде, включая Docker-контейнеры и 127.0.0.1
     )
     return UserResponse(id=user.id, email=user.email, username=user.username)
 

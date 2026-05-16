@@ -6,7 +6,6 @@ from pydantic import BaseModel
 import uuid
 from datetime import datetime
 from database.base import Base
-from database.document import DocumentResponse
 
 
 class Summary(Base):
@@ -26,7 +25,7 @@ class Summary(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    document: Mapped["Document"] = relationship(back_populates="summary")  # noqa: F821
+    document: Mapped["Document"] = relationship(back_populates="summary")
 
 
 class SummaryResponse(BaseModel):
@@ -36,6 +35,19 @@ class SummaryResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class DocumentResponse(BaseModel):
+    id: uuid.UUID
+    original_filename: str
+    file_size_bytes: int
+    characters_extracted: int
+    chunks_count: int
+    uploaded_at: datetime
+    has_summary: bool
+
+    class Config:
+        from_attributes = True
 
 
 class UploadResponse(BaseModel):

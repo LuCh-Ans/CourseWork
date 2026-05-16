@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,15 +19,16 @@ class Settings(BaseSettings):
     TESSERACT_PATH: str = "/usr/bin/tesseract"
     POPPLER_PATH: str = ""
 
-    GROQ_API_KEY: str = ""  
+    HF_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    GROQ_KEY: str = ""
+    BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
 
-    BASE_URL: str = "https://api.groq.com/openai/v1/chat/completions"
-    CURRENT_PROVIDER: str = "groq"
-    CURRENT_MODEL: str = "llama-3.3-70b-versatile"
-
-    LLM_MAX_TOKENS: int = 1024
-    LLM_TEMPERATURE: float = 0.3
+    CURRENT_PROVIDER: str = "openrouter"
+    CURRENT_MODEL: str = "meta-llama/llama-3.3-70b-instruct"
+    LLM_MAX_TOKENS: int = 1500
+    LLM_TEMPERATURE: float = 0.5
 
 
 settings = Settings()

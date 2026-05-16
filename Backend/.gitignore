@@ -26,3 +26,5 @@ files/uploads/
 .DS_Store
 
 ../.env
+.claude/
+.env

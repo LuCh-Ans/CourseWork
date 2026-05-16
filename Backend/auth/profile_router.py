@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,7 +11,7 @@ from database.progress import UserProgress
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
 
-@router.get("")
+@router.get("/me")
 async def get_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -40,7 +40,7 @@ async def get_profile(
     }
 
 
-@router.post("/activity")
+@router.post("/me/activity")
 async def record_activity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -67,7 +67,7 @@ async def record_activity(
         # Обновление streak
         last = progress.last_activity_at
         if last:
-            yesterday = today - timezone.timedelta(days=1)
+            yesterday = today - timedelta(days=1)
             if last.date() == yesterday:
                 progress.streak_days += 1
             else:

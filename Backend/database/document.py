@@ -1,14 +1,21 @@
 from __future__ import annotations
 import uuid
 from datetime import datetime
+from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.chunk import DocumentChunk
+
 from database.base import Base
+from database.chunk import DocumentChunk
+from database.summary import Summary
+from config import settings
+from pdf_service import process_file, blocks_to_text, create_chunks
+from llm.llm_client import summarize
+from vector_search import save_chunks
 
 
 class Document(Base):
@@ -34,7 +41,6 @@ class Document(Base):
     user: Mapped["User"] = relationship(back_populates="documents")  # noqa: F821
     summary: Mapped["Summary | None"] = relationship(back_populates="document", uselist=False)  # noqa: F821
     chunks: Mapped[list[DocumentChunk]] = relationship(back_populates="document", cascade="all, delete-orphan")
-
 
 
 class DocumentResponse(BaseModel):
@@ -97,25 +103,16 @@ class DocumentService:
             file_size_bytes: int,
             raw_bytes: bytes,
     ):
-        from pdf_service import process_file, blocks_to_text, create_chunks
-        from llm.llm_client import summarize
-        from pathlib import Path
-        from config import settings
-        from database.summary import Summary
-        from vector_search import save_chunks
-
         file_path = Path(settings.UPLOAD_DIR) / saved_as
         blocks = process_file(file_path)
         if not blocks:
             raise ValueError("No text could be extracted.")
 
-        # Суммари — для превью
         prompt_text = blocks_to_text(blocks)
         summary_text = await summarize(prompt_text)
         if not summary_text:
             raise ValueError("LLM вернул пустой ответ")
 
-        # Чанки для RAG
         chunks = create_chunks(blocks)
 
         doc = Document(
@@ -129,7 +126,6 @@ class DocumentService:
         self.db.add(doc)
         await self.db.flush()
 
-        # Сохраняем чанки с эмбеддингами
         await save_chunks(self.db, doc.id, chunks)
 
         summary = Summary(document_id=doc.id, text=summary_text)
