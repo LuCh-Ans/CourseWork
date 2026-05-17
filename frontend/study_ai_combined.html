@@ -717,6 +717,22 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
       <button class="btn-logout-sm" onclick="handleLogout()" title="Выйти">✕</button>
     </div>
 
+    <button class="btn-home-sm" onclick="window.location.href='/profile'" style="
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.55);
+      color: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.7);
+      width: 100%;
+    ">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="8" r="4"/>
+        <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
+      </svg>
+      Профиль
+    </button>
+
     <button class="btn-home-sm" onclick="showScreen('home')">← На главную</button>
 
     <button class="btn-dark" id="hist-btn" onclick="toggleHistory()">
@@ -1050,7 +1066,7 @@ async function openFileInChat() {
   const file = pendingHomeFile;
   closeHomeOverlay();
   showScreen('chat');
-  
+
   if (chats.length === 0) {
     await loadSessions();
     if (chats.length === 0) await initNewChat();
@@ -1058,7 +1074,7 @@ async function openFileInChat() {
   } else if (!activeChatId) {
     await switchChat(chats[0].id);
   }
-  
+
   await uploadFileToBacked(file);
 }
 
@@ -1366,6 +1382,9 @@ async function sendMessage(){
       body:JSON.stringify({role:'assistant', content:reply})
     }).catch(()=>{});
 
+    // Геймификация: сообщение отправлено
+    trackEvent('message_sent').catch(()=>{});
+
   } catch(e){
     thinkEl.remove();
     appendMsg('assistant','Ошибка: '+e.message,chat);
@@ -1530,6 +1549,8 @@ async function uploadFileToBacked(file, showSummary = true) {
         : `✅ Файл **${filename}** загружен. Задавай вопросы по его содержанию!`;
       appendMsg('assistant', summaryMsg, chat);
     }
+    // Геймификация: файл загружен
+    trackEvent('file_uploaded').catch(()=>{});
   } catch(e) {
     thinkEl.remove();
     showToast('Ошибка соединения с сервером');
@@ -1548,6 +1569,20 @@ function removeFile(){
   const chat = activeChat();
   if (chat) { chat.files = []; chat.fileContext = null; }
 }
+// ── ГЕЙМИФИКАЦИЯ: отправка событий на бэкенд ──
+async function trackEvent(event, value = 1) {
+  try {
+    await fetch(API_BACKEND + '/profile/me/event', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, value })
+    });
+  } catch(e) {
+    console.warn('trackEvent failed:', e);
+  }
+}
+
 // Загрузка всех чатов с сервера
 async function loadSessions() {
   try {
@@ -1559,18 +1594,27 @@ async function loadSessions() {
 
     if (res.ok) {
       const sessions = await res.json();
-      chats = sessions.map(s => ({
-        id: s.id,
-        title: s.title,
-        messages: s.messages || [],
-        history: s.messages || [],
-        cards: s.cards || [],
-        roadmap: s.roadmap || [],
-        cardIndex: s.card_index || 0,
-        cardWrong: s.card_wrong || 0,
-        cardRight: s.card_right || 0,
-        loaded: true
-      }));
+      chats = sessions.map(s => {
+        // Нормализуем сообщения в формат для истории LLM
+        const msgs = (s.messages || []).map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at
+        }));
+        return {
+          id: s.id,
+          title: s.title,
+          messages: msgs,                          // для отображения
+          history: msgs.map(m => ({ role: m.role, content: m.content })), // для LLM
+          cards: s.cards || [],
+          roadmap: s.roadmap || [],
+          cardIndex: s.card_index || 0,
+          cardWrong: s.card_wrong || 0,
+          cardRight: s.card_right || 0,
+          loaded: true
+        };
+      });
       console.log(`Загружено ${chats.length} чатов с сервера`);
     }
   } catch (e) {
@@ -1664,7 +1708,7 @@ async function openCards() {
   const prompt = context
   ? `На основе документа создай ровно 15 карточек. Отвечай ТОЛЬКО на русском языке. Верни ТОЛЬКО валидный JSON массив. Без пояснений, без markdown, без апострофов. Используй только двойные кавычки. Все математические формулы оборачивай в $...$ для инлайн и $$...$$ для блочных формул:\n[{"q":"вопрос","a":"ответ"},...]\n\n${context}`
   : `Создай 15 карточек по теме: "${chat.title}". Отвечай ТОЛЬКО на русском языке. Верни ТОЛЬКО валидный JSON. Без markdown, без апострофов. Только двойные кавычки. Все формулы в $...$ или $$...$$:\n[{"q":"вопрос","a":"ответ"},...]`;
-    
+
   try {
     const raw = await callAI([{role:'user', content: prompt}], null, 1200);
     chat.cards = parseJSON(raw);
@@ -1728,7 +1772,7 @@ function renderCard(chat) {
   });
 }
 
-function fcFlip() { fcFlipped = !fcFlipped; renderCard(); 
+function fcFlip() { fcFlipped = !fcFlipped; renderCard();
   renderMathInElement(document.getElementById('cards-body'), {
         delimiters: [
             {left: '$$', right: '$$', display: true},
@@ -1775,6 +1819,8 @@ function fcRate(knew) {
   if (knew) fcRight++; else fcWrong++;
   const chat = activeChat();
   if (chat) { chat.cardWrong = fcWrong; chat.cardRight = fcRight; }
+  // Геймификация: карточка пройдена
+  trackEvent('cards_done', 1).catch(()=>{});
   fcNext();
 }
 function closeCards() {
@@ -1835,6 +1881,8 @@ async function openRoadmap() {
     if (!Array.isArray(rmSteps) || rmSteps.length === 0) throw new Error('Пустой массив');
     chat.roadmap = rmSteps; // сохраняем в чат
     await saveRoadmapToBackend(chat.id, rmSteps);
+    // Геймификация: роадмап создан
+    trackEvent('roadmap_created').catch(()=>{});
     chat.rmExpanded = 0;
   } catch(e) {
     showToast('Ошибка роадмапа: ' + e.message);

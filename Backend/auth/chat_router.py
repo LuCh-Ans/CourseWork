@@ -41,12 +41,33 @@ class RoadmapSaveRequest(BaseModel):
 
 
 
-@router.get("", response_model=list[SessionListItem])
+@router.get("", response_model=list[SessionSchema])
 async def list_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await ChatService(db).get_sessions(current_user.id)
+    """Список всех сессий пользователя с сообщениями"""
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(ChatSession)
+        .options(selectinload(ChatSession.messages))
+        .where(ChatSession.user_id == current_user.id)
+        .order_by(ChatSession.updated_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.get("/{session_id}", response_model=SessionSchema)
+async def get_session(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Получить одну сессию с полными данными"""
+    session = await ChatService(db).get_session(session_id, current_user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
 
 
 @router.post("")
@@ -196,4 +217,3 @@ async def rename_chat_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
-

@@ -388,8 +388,11 @@ function render() {
 
 async function loadProfileFromAPI() {
     try {
-        const res = await fetch('http://127.0.0.1:8000/profile/me', { credentials: 'include' });
-        if (!res.ok) { window.location.href = '/'; return; }
+        const res = await fetch('/profile/me', { credentials: 'include' });
+        if (!res.ok) {
+          render();
+          return;
+        }
         const data = await res.json();
         const existing = loadStats();
         const s = {
