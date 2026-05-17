@@ -115,7 +115,7 @@ body { font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-seri
       </svg>
       <span class="logo-text">Study AI</span>
     </div>
-    <button class="btn-back" onclick="history.back()">
+    <button class="btn-back" onclick="window.location.href='/'">
       Вернуться в чат
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     </button>
@@ -386,7 +386,35 @@ function render() {
   renderAchievements(s);
 }
 
-render();
+async function loadProfileFromAPI() {
+    try {
+        const res = await fetch('/profile/me', { credentials: 'include' });
+        if (!res.ok) {
+          render();
+          return;
+        }
+        const data = await res.json();
+        const existing = loadStats();
+        const s = {
+            ...existing,
+            currentStreak: data.currentStreak,
+            maxStreak: data.maxStreak,
+            studyDays: data.studyDays,
+            chats: data.chats,
+            cardsDone: data.cardsDone,
+            roadmaps: data.roadmaps,
+            totalMinutes: data.totalMinutes,
+            activityMap: data.activityMap,
+        };
+        saveStats(s);
+        localStorage.setItem('studyai_username', data.username);
+    } catch(e) {
+        console.error('Profile load error:', e);
+    }
+    render();
+}
+
+loadProfileFromAPI();
 renderTimer();
 setInterval(() => { renderTimer(); }, 1000);
 
