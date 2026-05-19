@@ -22,7 +22,7 @@ class ChatSession(Base):
                                                              nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="Новый чат")
 
-    # Новые поля для карточек и роадмапа
+
     cards: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True, default=None)
     roadmap: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True, default=None)
     card_index: Mapped[Optional[int]] = mapped_column(default=0)
@@ -48,7 +48,7 @@ class ChatMessage(Base):
     session: Mapped["ChatSession"] = relationship(back_populates="messages")
 
 
-# ====================== SCHEMAS ======================
+
 
 class MessageSchema(BaseModel):
     id: uuid.UUID
@@ -84,14 +84,14 @@ class SessionListItem(BaseModel):
     class Config: from_attributes = True
 
 
-# ====================== SERVICE ======================
+
 
 class ChatService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def get_sessions(self, user_id: uuid.UUID) -> list[ChatSession]:
-        """Получить все сессии пользователя"""
+
         result = await self.db.execute(
             select(ChatSession)
             .where(ChatSession.user_id == user_id)
@@ -100,7 +100,7 @@ class ChatService:
         return result.scalars().all()
 
     async def get_session(self, session_id: uuid.UUID, user_id: uuid.UUID) -> Optional[ChatSession]:
-        """Получить одну сессию с сообщениями"""
+        
         result = await self.db.execute(
             select(ChatSession)
             .options(selectinload(ChatSession.messages))

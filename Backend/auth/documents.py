@@ -25,7 +25,7 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Загрузить файл → извлечь текст → суммаризировать → сохранить в БД."""
+
     original_name = file.filename or "unknown"
     suffix = Path(original_name).suffix.lower()
 
@@ -47,13 +47,13 @@ async def upload_document(
             detail=f"File exceeds the {settings.MAX_FILE_SIZE_MB} MB limit.",
         )
 
-    # Сохраняем на диск
+
     upload_dir = Path(settings.UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
     saved_as = f"{uuid.uuid4().hex}{suffix}"
     (upload_dir / saved_as).write_bytes(raw_bytes)
 
-    # Делегируем всю логику сервису
+
     try:
         doc, summary = await DocumentService(db).process_upload(
             user_id=current_user.id,
@@ -67,10 +67,10 @@ async def upload_document(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
-    # Создаём чат-сессию с именем файла (без расширения, макс. 80 символов)
+
     chat_title = Path(original_name).stem[:80]
     try:
-        # Проверяем, нет ли уже сессии для этого документа
+
         existing_session = await db.scalar(
             select(ChatSession).where(
                 and_(ChatSession.document_id == doc.id)
@@ -84,7 +84,7 @@ async def upload_document(
                 document_id=doc.id,
             )
     except Exception as e:
-        # Не блокируем загрузку из-за ошибки создания сессии
+
         print(f"Warning: could not create chat session for document {doc.id}: {e}")
 
     return UploadResponse(
@@ -113,7 +113,7 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Список всех загруженных документов текущего пользователя."""
+
     docs, total = await DocumentService(db).list_documents(
         user_id=current_user.id,
         offset=offset,
@@ -142,7 +142,7 @@ async def get_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Получить документ + саммари по ID."""
+
     try:
         doc = await DocumentService(db).get_document(
             document_id=document_id,
@@ -179,7 +179,7 @@ async def get_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Получаем прогресс пользователя
+
     result = await db.execute(
         select(UserProgress).where(UserProgress.user_id == current_user.id)
     )
@@ -192,7 +192,7 @@ async def get_profile(
         await db.refresh(progress)
 
     return {
-        "username": current_user.email,           # или username, если есть
+        "username": current_user.email,
         "currentStreak": progress.current_streak or 0,
         "maxStreak": progress.max_streak or 0,
         "studyDays": progress.study_days or 0,

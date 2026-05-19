@@ -24,7 +24,7 @@ class AuthService:
         self.db = db
 
     async def register(self, email: str, username: str, password: str) -> User:
-        # Проверяем что email и username свободны
+
         existing = await self.db.execute(
             select(User).where((User.email == email) | (User.username == username))
         )

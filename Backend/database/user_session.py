@@ -21,4 +21,4 @@ class UserSession(Base):
         DateTime(timezone=True), nullable=False
     )
 
-    user: Mapped["User"] = relationship(back_populates="sessions")  # noqa: F821
+    user: Mapped["User"] = relationship(back_populates="sessions")
