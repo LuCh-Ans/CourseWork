@@ -38,8 +38,8 @@ class Document(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship(back_populates="documents")  # noqa: F821
-    summary: Mapped["Summary | None"] = relationship(back_populates="document", uselist=False)  # noqa: F821
+    user: Mapped["User"] = relationship(back_populates="documents")
+    summary: Mapped["Summary | None"] = relationship(back_populates="document", uselist=False)
     chunks: Mapped[list[DocumentChunk]] = relationship(back_populates="document", cascade="all, delete-orphan")
 
 

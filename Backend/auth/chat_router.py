@@ -46,7 +46,7 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Список всех сессий пользователя с сообщениями"""
+
     from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(ChatSession)
@@ -63,7 +63,7 @@ async def get_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Получить одну сессию с полными данными"""
+
     session = await ChatService(db).get_session(session_id, current_user.id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -121,7 +121,7 @@ async def create_session(
         new_session = ChatSession(
             title=session_data.title,
             document_id=session_data.document_id,
-            user_id=current_user.id,  # ← важно привязать к пользователю
+            user_id=current_user.id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -153,7 +153,7 @@ async def add_chat_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Verify ownership
+
     session = await ChatService(db).get_session(session_id, current_user.id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")

@@ -65,23 +65,24 @@ async def summarize(text: str) -> str:
 
 
 async def _request(full_content: str) -> str:
+
     try:
-        return await _groq_request(full_content)
+        return await _openrouter_request(full_content)
     except Exception as e:
-        print(f"Groq failed: {e}, falling back to Gemini...", flush=True)
-        return await _gemini_request(full_content)
+        print(f"OpenRouter failed: {e}, falling back to Groq...", flush=True)
+        return await _groq_request(full_content)
 
 
-async def _groq_request(full_content: str) -> str:
-    if not settings.GROQ_KEY:
-        raise RuntimeError("GROQ_KEY is not set")
+async def _openrouter_request(full_content: str) -> str:
+    if not settings.OPENROUTER_KEY:
+        raise RuntimeError("OPENROUTER_KEY is not set")
 
     headers = {
-    "Authorization": f"Bearer {settings.GROQ_KEY}",
-    "Content-Type": "application/json",
-    "HTTP-Referer": "http://localhost:8000",
-    "X-Title": "StudyLab"
-    }   
+        "Authorization": f"Bearer {settings.OPENROUTER_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:8000",
+        "X-Title": "StudyLab"
+    }
     payload = {
         "model": settings.CURRENT_MODEL,
         "messages": [
@@ -92,32 +93,47 @@ async def _groq_request(full_content: str) -> str:
         "temperature": settings.LLM_TEMPERATURE
     }
     async with httpx.AsyncClient(timeout=300.0) as client:
-        response = await client.post(settings.BASE_URL, json=payload, headers=headers)
+        response = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            json=payload,
+            headers=headers
+        )
+        if response.status_code != 200:
+            raise RuntimeError(f"OpenRouter error {response.status_code}: {response.text}")
+        return response.json()['choices'][0]['message']['content']
+
+
+async def _groq_request(full_content: str) -> str:
+    if not settings.GROQ_KEY:
+        raise RuntimeError("GROQ_KEY is not set")
+
+    headers = {
+        "Authorization": f"Bearer {settings.GROQ_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:8000",
+        "X-Title": "StudyLab"
+    }
+    payload = {
+        "model": settings.CURRENT_MODEL,
+        "messages": [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": full_content}
+        ],
+        "max_tokens": settings.LLM_MAX_TOKENS,
+        "temperature": settings.LLM_TEMPERATURE
+    }
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        response = await client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json=payload,
+            headers=headers
+        )
         if response.status_code != 200:
             raise RuntimeError(f"Groq error {response.status_code}: {response.text}")
         return response.json()['choices'][0]['message']['content']
 
 
-async def _gemini_request(full_content: str) -> str:
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not set")
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
-    payload = {
-        "contents": [{"parts": [{"text": f"{_SYSTEM_PROMPT}\n\n{full_content}"}]}],
-        "generationConfig": {
-            "maxOutputTokens": settings.LLM_MAX_TOKENS,
-            "temperature": settings.LLM_TEMPERATURE
-        }
-    }
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
-        if response.status_code != 200:
-            raise RuntimeError(f"Gemini error {response.status_code}: {response.text}")
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
-
-
 async def _openai_compat_summarize(text: str, prompt_template: str) -> str:
-    """Совместимость со старым кодом"""
+
     full_content = f"{prompt_template}\n\n{text}".strip()
     return await _request(full_content)

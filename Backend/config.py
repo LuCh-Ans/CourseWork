@@ -19,9 +19,8 @@ class Settings(BaseSettings):
     TESSERACT_PATH: str = "/usr/bin/tesseract"
     POPPLER_PATH: str = ""
 
-    HF_API_KEY: str = ""
-    GEMINI_API_KEY: str = ""
-    OPENROUTER_API_KEY: str = ""
+
+    OPENROUTER_KEY: str = ""
     GROQ_KEY: str = ""
     BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
 
