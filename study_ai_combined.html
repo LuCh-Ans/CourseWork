@@ -709,11 +709,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
     </div>
 
     <!-- User block in sidebar -->
+    <div class="user-row-sidebar">
+      <div class="user-avatar-sm">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+      </div>
+      <span class="user-name-sidebar" id="chatUserName">Пользователь</span>
+      <button class="btn-logout-sm" onclick="handleLogout()" title="Выйти">✕</button>
+    </div>
 
-    <button class="btn-home-sm" onclick="handleLogout()" 
-      style="background:rgba(255,255,255,.55);
-      color:#1a1a1a;border:1px 
-      solid rgba(255,255,255,.7);">Выйти</button>
     <button class="btn-home-sm" onclick="window.location.href='/profile'" style="
       display: flex;
       align-items: center;
@@ -727,7 +730,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Manrope'
         <circle cx="12" cy="8" r="4"/>
         <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
       </svg>
-      Мой прогресс
+      Профиль
     </button>
 
     <button class="btn-home-sm" onclick="showScreen('home')">← На главную</button>
