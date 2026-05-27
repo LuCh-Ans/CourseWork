@@ -16,7 +16,13 @@ def get_model() -> SentenceTransformer:
 
 
 def embed(texts: List[str]) -> List[List[float]]:
-    return get_model().encode(texts, convert_to_numpy=True).tolist()
+    prefixed = [f"passage: {t}" for t in texts]
+    return get_model().encode(prefixed, convert_to_numpy=True).tolist()
+
+
+def embed_query(query: str) -> List[float]:
+    prefixed = f"query: {query}"
+    return get_model().encode([prefixed], convert_to_numpy=True).tolist()[0]
 
 
 async def save_chunks(db: AsyncSession, document_id: uuid.UUID, chunks: List[dict]):
@@ -35,7 +41,7 @@ async def save_chunks(db: AsyncSession, document_id: uuid.UUID, chunks: List[dic
 
 async def search_chunks(db: AsyncSession, document_id: uuid.UUID, query: str, top_k: int = 5) -> List[str]:
     from database.chunk import DocumentChunk
-    query_emb = embed([query])[0]
+    query_emb = embed_query(query)
     result = await db.execute(
         select(DocumentChunk).where(DocumentChunk.document_id == document_id)
     )
